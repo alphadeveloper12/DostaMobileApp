@@ -1,0 +1,39 @@
+<svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .sketch {
+      stroke: #054A86;
+      stroke-width: 1.5;
+      stroke-dasharray: 100;
+      stroke-dashoffset: 100;
+      animation: sketch-anim 2s infinite ease-in-out;
+      fill: transparent;
+    }
+    @keyframes sketch-anim {
+      0% {
+        stroke-dashoffset: 100;
+        fill: transparent;
+        opacity: 1;
+      }
+      40% {
+        stroke-dashoffset: 0;
+        fill: transparent;
+        opacity: 1;
+      }
+      55% {
+        fill: #054A86;
+        opacity: 1;
+      }
+      85% {
+        fill: #054A86;
+        stroke-dashoffset: 0;
+        opacity: 1;
+      }
+      100% {
+        fill: transparent;
+        stroke-dashoffset: 0;
+        opacity: 0;
+      }
+    }
+  </style>
+  <path class="sketch" pathLength="100" d="M23.8235 11.8072C23.8235 5.29047 18.4901 0 11.9206 0H3.72628C1.67771 0 0 1.6467 0 3.69632V8.30358C0 10.3357 1.66005 11.9999 3.72628 11.9999H16.212C9.46582 11.9999 4.00885 17.3079 4.09715 23.9998H11.7087C18.4548 23.9998 23.9118 18.4991 23.8235 11.8072Z"/>
+</svg>
