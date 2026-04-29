@@ -31,11 +31,9 @@ import {
   Platform,
   ActivityIndicator,
   StyleSheet,
-  Switch,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Eye, EyeOff, Check } from 'lucide-react-native';
 import axios from 'axios';
 import { useDispatch } from 'react-redux';
@@ -51,12 +49,19 @@ import { setUser } from '@/store/slices/userSlice';
 import AnimateOnScroll from '@/components/ui/AnimateOnScroll';
 
 import DostaBlue from '@/assets/images/nav/dosta_blue.svg';
-const SLIDER_IMG = require('@/assets/images/auth/slider-image.jpg');
 
 // Steps — same as web const steps = [1, 2, 3]
 const STEPS = [1, 2, 3];
 
 // ── Step Progress indicator (translated from web RightBar progress steps) ──────
+// Web mobile: tiny circles (w-3 h-3 = 12px), connectors w-[5rem], with the
+// labels stacked underneath each circle in two-line form ("Personal\nDetails").
+const STEP_LABELS = [
+  'Personal\nDetails',
+  'Additional\nInfo',
+  'Confirmation',
+];
+
 const StepProgress = ({ currentStep }: { currentStep: number }) => (
   <View style={styles.stepsRow}>
     {STEPS.map((step, index) => {
@@ -64,44 +69,61 @@ const StepProgress = ({ currentStep }: { currentStep: number }) => (
       const isActive    = step === currentStep;
 
       return (
-        <React.Fragment key={step}>
-          {/* Step circle */}
-          <View
-            style={[
-              styles.stepCircle,
-              isCompleted && styles.stepCircleCompleted,
-              isActive    && styles.stepCircleActive,
-            ]}>
-            {isCompleted ? (
-              <Check size={14} color={Colors.neutralWhite} />
-            ) : (
-              <Text
-                style={[
-                  styles.stepNum,
-                  isActive && styles.stepNumActive,
-                ]}>
-                {step}
-              </Text>
-            )}
-          </View>
-          {/* Connector line */}
-          {index < STEPS.length - 1 && (
+        <View key={step} style={styles.stepCol}>
+          <View style={styles.stepRow}>
+            {/* Tiny dot — web w-3 h-3 = 12px */}
             <View
               style={[
-                styles.stepLine,
-                isCompleted && styles.stepLineCompleted,
-              ]}
-            />
-          )}
-        </React.Fragment>
+                styles.stepDot,
+                isCompleted && styles.stepDotCompleted,
+                isActive    && styles.stepDotActive,
+              ]}>
+              {isCompleted && <Check size={9} color={Colors.neutralWhite} />}
+            </View>
+            {/* Connector */}
+            {index < STEPS.length - 1 && (
+              <View
+                style={[
+                  styles.stepLine,
+                  isCompleted && styles.stepLineCompleted,
+                ]}
+              />
+            )}
+          </View>
+          {/* Label below — text-[16px] font-[700] */}
+          <Text
+            style={[
+              styles.stepLabel,
+              isActive    && styles.stepLabelActive,
+              isCompleted && styles.stepLabelCompleted,
+            ]}>
+            {STEP_LABELS[index]}
+          </Text>
+        </View>
       );
     })}
   </View>
 );
 
+// Resolve the post-signup destination. Auth screens are launched with an
+// optional `returnTo` route param so the user is bounced back to the screen
+// they came from (e.g. Cart) instead of always landing on Home.
+function navigateAfterAuth(navigation: any, route: any) {
+  const returnTo = route?.params?.returnTo;
+  if (returnTo?.name) {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: returnTo.name, params: returnTo.params }],
+    });
+  } else {
+    navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+  }
+}
+
 export default function SignUpScreen() {
   const insets     = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const route      = useRoute<any>();
   const dispatch   = useDispatch();
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -183,7 +205,7 @@ export default function SignUpScreen() {
           await removeGuestCart();
         } catch {}
       }
-      navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+      navigateAfterAuth(navigation, route);
     } catch (err: any) {
       let msg = 'Signup failed. Please try again.';
       const data = err?.response?.data;
@@ -215,7 +237,7 @@ export default function SignUpScreen() {
         await setAuthToken(res.data.token);
         await persistUser(res.data.user);
         dispatch(setUser(res.data.user));
-        navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+        navigateAfterAuth(navigation, route);
       } else {
         setApiError('Invalid OTP. Please try again.');
       }
@@ -379,15 +401,20 @@ export default function SignUpScreen() {
               {!!phoneError && <Text style={styles.fieldError}>{phoneError}</Text>}
             </View>
 
-            {/* 2FA toggle — exact from web */}
-            <View style={styles.twoFARow}>
-              <Switch
-                value={is2FAEnabled}
-                onValueChange={setIs2FA}
-                trackColor={{ true: Colors.primary, false: Colors.neutralGrayLight }}
-              />
+            {/* 2FA — web uses a plain checkbox, not a switch */}
+            <TouchableOpacity
+              style={styles.twoFARow}
+              onPress={() => setIs2FA((v) => !v)}
+              activeOpacity={0.7}>
+              <View
+                style={[
+                  styles.checkbox,
+                  is2FAEnabled && styles.checkboxActive,
+                ]}>
+                {is2FAEnabled && <Check size={14} color={Colors.neutralWhite} />}
+              </View>
               <Text style={styles.twoFALabel}>Turn on 2-factor authentication</Text>
-            </View>
+            </TouchableOpacity>
           </View>
         );
 
@@ -430,17 +457,13 @@ export default function SignUpScreen() {
       style={{ flex: 1, backgroundColor: Colors.neutralWhite }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
-        style={{ flex: 1 }}
+        style={{ flex: 1, paddingTop: insets.top }}
         contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
 
-        {/* Left panel as top strip (hidden on mobile in web → top strip on native) */}
-        <Image
-          source={SLIDER_IMG}
-          style={styles.topStrip}
-          contentFit="cover"
-        />
+        {/* Web hides the LeftBar image entirely on mobile (`hidden lg:flex`).
+            We follow the same rule — the form is the whole screen on phones. */}
 
         {/* Right panel — main form */}
         <View style={styles.formContainer}>
@@ -466,7 +489,7 @@ export default function SignUpScreen() {
               <TouchableOpacity
                 style={styles.prevBtn}
                 onPress={handlePrevious}>
-                <Text style={styles.prevBtnText}>Previous</Text>
+                <Text style={styles.prevBtnText}>Back</Text>
               </TouchableOpacity>
             )}
 
@@ -478,11 +501,7 @@ export default function SignUpScreen() {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.nextBtnText}>
-                  {currentStep === 3
-                    ? 'Confirm'
-                    : currentStep === 2 && !is2FAEnabled
-                    ? 'Create account'
-                    : 'Next'}
+                  {currentStep === 3 ? 'Verify & Continue' : 'Continue'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -502,61 +521,86 @@ export default function SignUpScreen() {
 }
 
 const styles = StyleSheet.create({
-  topStrip: {
-    width: '100%',
-    height: 180,
-  },
   formContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 32,
+    paddingHorizontal: 16,           // web: px-[15px]
+    paddingTop: 24,                  // pt-6
+    paddingBottom: 32,               // pb-8
     backgroundColor: Colors.neutralWhite,
   },
   logo: {
     height: 28,
     width: 158,
-    marginBottom: 44,
+    marginBottom: 44,                // pb-[44px]
   },
-  // Progress steps
+  // Progress: row of {dot + connector + label below}
   stepsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginTop: 24,
     marginBottom: 32,
   },
-  stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  stepCol: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  // Tiny circle — w-3 h-3 rounded-full
+  stepDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#D1D5DB',      // bg-gray-300
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepDotActive: {
+    backgroundColor: Colors.primary, // bg-[#054A86]
+  },
+  stepDotCompleted: {
+    backgroundColor: '#22C55E',      // bg-green-500
+  },
+  // Connector — w-[5rem] h-[2px]
+  stepLine: {
+    width: 80,
+    height: 2,
+    marginLeft: 12,
+    backgroundColor: '#D1D5DB',
+  },
+  stepLineCompleted: {
+    backgroundColor: '#22C55E',
+  },
+  // Label below dot — text-[16px] font-[700] mt-3
+  stepLabel: {
+    marginTop: 12,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+    color: Colors.neutralGray,
+  },
+  stepLabelActive: {
+    color: Colors.primary,
+  },
+  stepLabelCompleted: {
+    color: Colors.neutralBlack,
+  },
+  // Checkbox for 2FA — web uses a native checkbox with h-5 w-5
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
     borderWidth: 1.5,
     borderColor: Colors.neutralGrayLight,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.neutralWhite,
   },
-  stepCircleActive: {
+  checkboxActive: {
+    backgroundColor: Colors.primary,
     borderColor: Colors.primary,
-    backgroundColor: Colors.primary,
-  },
-  stepCircleCompleted: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary,
-  },
-  stepNum: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.neutralGray,
-  },
-  stepNumActive: {
-    color: Colors.neutralWhite,
-  },
-  stepLine: {
-    flex: 1,
-    height: 1.5,
-    backgroundColor: Colors.neutralGrayLight,
-    marginHorizontal: 4,
-  },
-  stepLineCompleted: {
-    backgroundColor: Colors.primary,
   },
   // Step content
   stepHeading: {

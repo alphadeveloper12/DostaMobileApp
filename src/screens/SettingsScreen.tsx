@@ -42,10 +42,10 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { User, MapPin, CreditCard, Shield } from 'lucide-react-native';
 import axios from 'axios';
-import Toast from 'react-native-toast-message';
+import { showAppToast as showToast, hideAppToast } from '@/components/common/AppToast';
 import { useDispatch } from 'react-redux';
 import { Country, State } from 'country-state-city';
 import { Colors } from '@/utils/colors';
@@ -65,11 +65,26 @@ const NAV_ITEMS = [
   { id: 4, Icon: Shield,     label: 'Security',        description: 'Password, 2FA' },
 ];
 
+// Email notification options — exact labels from web AccountSettings.tsx
+const NOTIFICATION_OPTIONS = [
+  { key: 'new_deals',         label: 'New deals' },
+  { key: 'password_changes',  label: 'Password changes' },
+  { key: 'new_restaurants',   label: 'New restaurants' },
+  { key: 'special_offers',    label: 'Special offers' },
+  { key: 'order_statuses',    label: 'Order statuses' },
+  { key: 'newsletter',        label: 'Newsletter' },
+];
+
 // ── AccountSettings (translation of web AccountSettings.tsx) ─────────────────
 const AccountSettings = () => {
   const navigation = useNavigation<any>();
   const dispatch   = useDispatch();
   const [profile,       setProfile]       = useState<any>(null);
+  // Snapshot of the profile/notifications when the page loaded — used to
+  // implement web's "Discard changes" button which reverts the form to its
+  // last-saved state without a re-fetch.
+  const [original,      setOriginal]      = useState<any>(null);
+  const [originalNotifs,setOriginalNotifs]= useState<string[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [updating,      setUpdating]      = useState(false);
   const [notifications, setNotifications] = useState<string[]>([]);
@@ -77,7 +92,7 @@ const AccountSettings = () => {
   useEffect(() => {
     const fetch_ = async () => {
       const token = await getAuthToken();
-      if (!token) { navigation.navigate('SignIn'); return; }
+      if (!token) { navigation.replace('SignIn'); return; }
       try {
         const res = await fetch(`${BASE_URL}/api/profile/`, {
           headers: { Authorization: `Token ${token}` },
@@ -85,12 +100,33 @@ const AccountSettings = () => {
         if (!res.ok) throw new Error('Failed');
         const data = await res.json();
         setProfile(data);
+        setOriginal(data);
         setNotifications(data.email_notifications || []);
-      } catch { navigation.navigate('SignIn'); }
+        setOriginalNotifs(data.email_notifications || []);
+      } catch { navigation.replace('SignIn'); }
       finally { setLoading(false); }
     };
     fetch_();
   }, []);
+
+  const handleDiscard = () => {
+    setProfile(original);
+    setNotifications(originalNotifs);
+  };
+
+  // Compute whether any editable field differs from the last saved snapshot.
+  // Save / Discard stay disabled while everything matches, mirroring web's
+  // sensible-form-state UX. Editable fields = full_name, company, and the
+  // notification list (email/phone are readonly so they aren't checked).
+  const isDirty = (() => {
+    if (!profile || !original) return false;
+    if ((profile.full_name ?? '') !== (original.full_name ?? '')) return true;
+    if ((profile.company   ?? '') !== (original.company   ?? '')) return true;
+    if (notifications.length !== originalNotifs.length) return true;
+    const a = [...notifications].sort();
+    const b = [...originalNotifs].sort();
+    return a.some((n, i) => n !== b[i]);
+  })();
 
   const handleSave = async () => {
     const token = await getAuthToken();
@@ -109,9 +145,11 @@ const AccountSettings = () => {
       if (!res.ok) throw new Error('Update failed');
       const updated = await res.json();
       setProfile(updated);
-      Toast.show({ type: 'success', text1: 'Profile updated successfully!' });
+      setOriginal(updated);
+      setOriginalNotifs(updated.email_notifications || notifications);
+      showToast({ type: 'success', text1: 'Profile updated successfully!' });
     } catch {
-      Toast.show({ type: 'error', text1: 'Failed to update profile.' });
+      showToast({ type: 'error', text1: 'Failed to update profile.' });
     } finally { setUpdating(false); }
   };
 
@@ -127,7 +165,7 @@ const AccountSettings = () => {
   if (loading) return <Shimmer />;
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <View>
       {/* h1 "Account" text-[20px] font-[600] */}
       <Text style={settingsStyles.sectionHeading}>Account</Text>
 
@@ -155,41 +193,45 @@ const AccountSettings = () => {
           </View>
         ))}
 
-        {/* Email notifications */}
+        {/* Email notifications — labels match web AccountSettings.tsx */}
         <Text style={[settingsStyles.cardTitle, { marginTop: 24 }]}>Email notifications</Text>
-        {['marketing', 'order_updates', 'weekly_digest'].map((n) => (
-          <View key={n} style={settingsStyles.checkRow}>
+        {NOTIFICATION_OPTIONS.map(({ key, label }) => (
+          <View key={key} style={settingsStyles.checkRow}>
             <Switch
-              value={notifications.includes(n)}
+              value={notifications.includes(key)}
               onValueChange={(v) =>
                 setNotifications((prev) =>
-                  v ? [...prev, n] : prev.filter((x) => x !== n),
+                  v ? [...prev, key] : prev.filter((x) => x !== key),
                 )
               }
               trackColor={{ true: Colors.primary, false: Colors.neutralGrayLight }}
             />
-            <Text style={settingsStyles.checkLabel}>
-              {n === 'marketing'    ? 'Marketing emails' :
-               n === 'order_updates'? 'Order update emails' :
-               'Weekly digest'}
-            </Text>
+            <Text style={settingsStyles.checkLabel}>{label}</Text>
           </View>
         ))}
+      </View>
 
-        {/* Save button */}
+      {/* Footer button row — web has Logout / Discard / Save in a single
+          flex row that stacks vertically on mobile. Save and Discard stay
+          disabled until the user actually changes a field. */}
+      <View style={settingsStyles.footerActions}>
+        <TouchableOpacity style={settingsStyles.logoutBtn} onPress={handleLogout}>
+          <Text style={settingsStyles.logoutBtnText}>Logout</Text>
+        </TouchableOpacity>
         <TouchableOpacity
-          style={settingsStyles.saveBtn}
+          style={[settingsStyles.discardBtn, !isDirty && settingsStyles.btnDisabled]}
+          onPress={handleDiscard}
+          disabled={!isDirty}>
+          <Text style={[settingsStyles.discardBtnText, !isDirty && settingsStyles.btnTextDisabled]}>Discard changes</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[settingsStyles.saveBtn, (!isDirty || updating) && settingsStyles.btnDisabled]}
           onPress={handleSave}
-          disabled={updating}>
+          disabled={!isDirty || updating}>
           {updating ? <ActivityIndicator color="#fff" /> : <Text style={settingsStyles.saveBtnText}>Save changes</Text>}
         </TouchableOpacity>
       </View>
-
-      {/* Logout */}
-      <TouchableOpacity style={settingsStyles.logoutBtn} onPress={handleLogout}>
-        <Text style={settingsStyles.logoutBtnText}>Logout</Text>
-      </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
 };
 
@@ -232,16 +274,16 @@ const AddressSettings = () => {
       });
       setAddresses((prev) => [...prev, res.data]);
       setShowForm(false);
-      Toast.show({ type: 'success', text1: 'Address added!' });
+      showToast({ type: 'success', text1: 'Address added!' });
     } catch {
-      Toast.show({ type: 'error', text1: 'Failed to add address.' });
+      showToast({ type: 'error', text1: 'Failed to add address.' });
     } finally { setSubmitting(false); }
   };
 
   if (loading) return <Shimmer />;
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <View>
       <Text style={settingsStyles.sectionHeading}>Address</Text>
 
       {/* Existing addresses */}
@@ -268,7 +310,7 @@ const AddressSettings = () => {
         </TouchableOpacity>
       ) : (
         <View style={settingsStyles.card}>
-          <Text style={settingsStyles.cardTitle}>New Address</Text>
+          <Text style={settingsStyles.cardTitle}>New address</Text>
           {[
             { label: 'Label',           key: 'label',           placeholder: 'e.g. Home, Work' },
             { label: 'Address Line 1',  key: 'address_line_1',  placeholder: 'Street address' },
@@ -286,20 +328,70 @@ const AddressSettings = () => {
               />
             </View>
           ))}
+
+          {/* Country picker — translates web's country-state-city <select> to
+              a tap-to-open horizontal scroll list. Selecting a country resets
+              the dependent zone, just like the web. */}
+          <View style={settingsStyles.field}>
+            <Text style={settingsStyles.fieldLabel}>Country</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+              {countries.slice(0, 50).map((c) => {
+                const active = form.country === c.name;
+                return (
+                  <TouchableOpacity
+                    key={c.isoCode}
+                    style={[settingsStyles.chip, active && settingsStyles.chipActive]}
+                    onPress={() => setForm((f) => ({ ...f, country: c.name, zone: '' }))}>
+                    <Text style={[settingsStyles.chipText, active && settingsStyles.chipTextActive]}>
+                      {c.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {zones.length > 0 && (
+            <View style={settingsStyles.field}>
+              <Text style={settingsStyles.fieldLabel}>Zone / State</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                {zones.map((z) => {
+                  const active = form.zone === z.name;
+                  return (
+                    <TouchableOpacity
+                      key={z.isoCode}
+                      style={[settingsStyles.chip, active && settingsStyles.chipActive]}
+                      onPress={() => setForm((f) => ({ ...f, zone: z.name }))}>
+                      <Text style={[settingsStyles.chipText, active && settingsStyles.chipTextActive]}>
+                        {z.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
           <TouchableOpacity
             style={settingsStyles.saveBtn}
             onPress={handleAdd}
             disabled={submitting}>
-            {submitting ? <ActivityIndicator color="#fff" /> : <Text style={settingsStyles.saveBtnText}>Save Address</Text>}
+            {submitting ? <ActivityIndicator color="#fff" /> : <Text style={settingsStyles.saveBtnText}>Add new address</Text>}
           </TouchableOpacity>
           <TouchableOpacity
-            style={[settingsStyles.logoutBtn, { marginTop: 8 }]}
+            style={[settingsStyles.discardBtn, { marginTop: 8 }]}
             onPress={() => setShowForm(false)}>
-            <Text style={settingsStyles.logoutBtnText}>Cancel</Text>
+            <Text style={settingsStyles.discardBtnText}>Cancel</Text>
           </TouchableOpacity>
         </View>
       )}
-    </ScrollView>
+    </View>
   );
 };
 
@@ -347,16 +439,16 @@ const PaymentSettings = () => {
       });
       setPayments((prev) => [...prev, res.data]);
       setShowForm(false);
-      Toast.show({ type: 'success', text1: 'Payment method added!' });
+      showToast({ type: 'success', text1: 'Payment method added!' });
     } catch {
-      Toast.show({ type: 'error', text1: 'Failed to add payment method.' });
+      showToast({ type: 'error', text1: 'Failed to add payment method.' });
     } finally { setSubmitting(false); }
   };
 
   if (loading) return <Shimmer />;
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <View>
       <Text style={settingsStyles.sectionHeading}>Payment method</Text>
 
       {payments.map((p) => (
@@ -431,7 +523,7 @@ const PaymentSettings = () => {
           </TouchableOpacity>
         </View>
       )}
-    </ScrollView>
+    </View>
   );
 };
 
@@ -452,13 +544,13 @@ const SecuritySettings = () => {
       await axios.post(`${BASE_URL}/api/enable-2fa/`, { phone_number: phone }, {
         headers: { Authorization: `Token ${token}` },
       });
-      Toast.show({ type: 'success', text1: '2FA enabled successfully!' });
-    } catch { Toast.show({ type: 'error', text1: 'Failed to enable 2FA.' }); }
+      showToast({ type: 'success', text1: '2FA enabled successfully!' });
+    } catch { showToast({ type: 'error', text1: 'Failed to enable 2FA.' }); }
     finally { setLoading2FA(false); }
   };
 
   const handleChangePw = async () => {
-    if (newPw !== confirmPw) { Toast.show({ type: 'error', text1: 'Passwords do not match.' }); return; }
+    if (newPw !== confirmPw) { showToast({ type: 'error', text1: 'Passwords do not match.' }); return; }
     const token = await getAuthToken();
     if (!token) return;
     setLoadingPw(true);
@@ -467,14 +559,14 @@ const SecuritySettings = () => {
         current_password: currentPw,
         new_password:     newPw,
       }, { headers: { Authorization: `Token ${token}` } });
-      Toast.show({ type: 'success', text1: 'Password changed successfully!' });
+      showToast({ type: 'success', text1: 'Password changed successfully!' });
       setCurrentPw(''); setNewPw(''); setConfirmPw('');
-    } catch { Toast.show({ type: 'error', text1: 'Failed to change password.' }); }
+    } catch { showToast({ type: 'error', text1: 'Failed to change password.' }); }
     finally { setLoadingPw(false); }
   };
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <View>
       <Text style={settingsStyles.sectionHeading}>Security</Text>
 
       {/* 2FA section */}
@@ -526,7 +618,7 @@ const SecuritySettings = () => {
           {loadingPw ? <ActivityIndicator color="#fff" /> : <Text style={settingsStyles.saveBtnText}>Change password</Text>}
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </View>
   );
 };
 
@@ -534,6 +626,14 @@ const SecuritySettings = () => {
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [tab,  setTab]  = useState(1);
+
+  // Defensive cleanup — dismiss any active toast on screen blur so it can't
+  // bleed onto the next screen.
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => hideAppToast();
+    }, []),
+  );
 
   const renderContent = () => {
     switch (tab) {
@@ -549,19 +649,28 @@ export default function SettingsScreen() {
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       <Header />
 
-      <View style={styles.layout}>
-        {/* Sidebar */}
-        <View style={styles.sidebar}>
-          <Text style={styles.sidebarTitle}>Settings</Text>
+      {/* Web mobile flow: Header stays fixed at the top, then a single
+          scrollable column containing the page title, the 4 nav buttons,
+          and the active tab's content. Nothing pinned to the viewport
+          besides the header — the nav scrolls away with the rest of the
+          page exactly like the web. */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.scrollBody}
+        showsVerticalScrollIndicator={false}>
+        <Text style={styles.pageTitle}>Settings</Text>
+
+        <View style={styles.navList}>
           {NAV_ITEMS.map(({ id, Icon, label, description }) => {
             const isActive = tab === id;
             return (
               <TouchableOpacity
                 key={id}
                 style={[styles.navItem, isActive && styles.navItemActive]}
-                onPress={() => setTab(id)}>
+                onPress={() => setTab(id)}
+                activeOpacity={0.85}>
                 <View style={[styles.navIconWrap, isActive && styles.navIconWrapActive]}>
-                  <Icon size={20} color={isActive ? Colors.primary : Colors.neutralGray} />
+                  <Icon size={20} color={isActive ? Colors.neutralWhite : Colors.neutralGrayDark} />
                 </View>
                 <View style={styles.navTextWrap}>
                   <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>{label}</Text>
@@ -572,11 +681,10 @@ export default function SettingsScreen() {
           })}
         </View>
 
-        {/* Content */}
         <View style={styles.content}>
           {renderContent()}
         </View>
-      </View>
+      </ScrollView>
 
       <MobileFooterNav />
     </View>
@@ -585,41 +693,61 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.neutralWhite },
-  layout: { flex: 1, flexDirection: 'column' },
-  // Sidebar — top tabs on mobile (lg:flex-row on web)
-  sidebar: {
+  // Single scrollable column: title → nav list → tab content. Padding-bottom
+  // leaves room for the fixed MobileFooterNav.
+  scrollBody: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    backgroundColor: Colors.neutralWhite,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.neutralGrayLightest,
+    paddingBottom: 120,
   },
-  sidebarTitle: {
-    fontSize: 20,
+  pageTitle: {
+    fontSize: 20,                          // text-[20px]
+    lineHeight: 28,                        // leading-[28px]
     fontWeight: '600',
+    letterSpacing: 0.1,
     color: Colors.neutralBlack,
-    marginBottom: 12,
+    marginBottom: 16,
   },
+  navList: {
+    marginBottom: 24,
+  },
+  // Web inactive: border-2 border-[#EDEEF2], gap-4, p-4, rounded-[16px]
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    padding: 12,
+    padding: 14,
     borderRadius: 16,
-    marginBottom: 4,
+    borderWidth: 2,
+    borderColor: Colors.neutralGrayLightest,
+    backgroundColor: Colors.neutralWhite,
+    marginBottom: 12,
   },
-  navItemActive: { backgroundColor: Colors.primaryLight },
+  // Web active: border-2 border-[#054A86], shadow-sm, accent bg
+  navItemActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#F5F9FF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  // Web inactive icon: bg-[#EDEEF2], muted icon color
   navIconWrap: {
-    width: 40, height: 40, borderRadius: 8,
-    backgroundColor: Colors.background,
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: Colors.neutralGrayLightest,
     alignItems: 'center', justifyContent: 'center',
   },
-  navIconWrapActive: { backgroundColor: 'rgba(5,74,134,0.1)' },
+  // Web active icon: bg-[#054A86] solid, white icon
+  navIconWrapActive: { backgroundColor: Colors.primary },
   navTextWrap: { flex: 1 },
-  navLabel: { fontSize: 14, fontWeight: '500', color: Colors.neutralBlack },
-  navLabelActive: { color: Colors.primary, fontWeight: '600' },
-  navDesc: { fontSize: 12, color: Colors.neutralGray, marginTop: 1 },
-  content: { flex: 1, padding: 16, paddingBottom: 0 },
+  navLabel: { fontSize: 14, fontWeight: '600', color: Colors.neutralBlack },
+  navLabelActive: { color: Colors.primary, fontWeight: '700' },
+  navDesc: { fontSize: 12, color: Colors.neutralGray, marginTop: 2 },
+  // The active tab's container — no horizontal padding here, the parent
+  // scrollBody already handles it.
+  content: {},
 });
 
 const settingsStyles = StyleSheet.create({
@@ -681,13 +809,35 @@ const settingsStyles = StyleSheet.create({
   saveBtnText: { color: Colors.neutralWhite, fontWeight: '700', fontSize: 14 },
   logoutBtn: {
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: '#FF5C60',
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
     marginTop: 8,
+    backgroundColor: 'transparent',
   },
-  logoutBtnText: { color: '#EF4444', fontWeight: '700', fontSize: 14 },
+  logoutBtnText: { color: '#FF5C60', fontWeight: '700', fontSize: 14 },
+  // Web Discard button: outline neutral
+  discardBtn: {
+    borderWidth: 1,
+    borderColor: Colors.neutralGrayLightest,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 8,
+    backgroundColor: Colors.neutralWhite,
+  },
+  discardBtnText: { color: Colors.neutralBlack, fontWeight: '600', fontSize: 14 },
+  // Greyed-out look for Save / Discard while the form is unchanged.
+  btnDisabled: { opacity: 0.5 },
+  btnTextDisabled: { color: Colors.neutralGray },
+  // Web footer row: flex flex-col sm:flex-row gap-4 — vertical stack on mobile
+  footerActions: {
+    flexDirection: 'column',
+    gap: 4,
+    paddingTop: 4,
+    paddingBottom: 24,
+  },
   addBtn: {
     borderWidth: 1.5,
     borderColor: Colors.primary,
@@ -720,4 +870,20 @@ const settingsStyles = StyleSheet.create({
   maskedCard: { fontSize: 16, fontWeight: '600', color: Colors.neutralBlack, fontFamily: 'monospace' },
   cardExpiry: { fontSize: 12, color: Colors.neutralGray, marginTop: 2 },
   cardHolder: { fontSize: 13, color: Colors.neutralGrayDark, marginTop: 2 },
+  // Pill-style chip used for the country / zone pickers. Matches web's
+  // dropdown semantics with a horizontal-scroll list of selectable options.
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.neutralGrayLight,
+    backgroundColor: Colors.neutralWhite,
+  },
+  chipActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#EAF5FF',
+  },
+  chipText: { fontSize: 13, color: Colors.neutralGrayDark, fontWeight: '500' },
+  chipTextActive: { color: Colors.primary, fontWeight: '700' },
 });

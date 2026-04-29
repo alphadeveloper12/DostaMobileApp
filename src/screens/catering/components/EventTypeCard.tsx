@@ -10,11 +10,9 @@
  *     active: text-[#054A86] font-semibold
  */
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Colors } from '@/utils/colors';
-
-const W = (Dimensions.get('window').width - 56) / 2;
 
 interface Props {
   image:    string;
@@ -23,19 +21,19 @@ interface Props {
   onPress?: () => void;
 }
 
+// Width is controlled by the parent (`width: '48%'`) so the layout adapts to
+// any combination of paddings without hard-coded screen-width math.
 export default function EventTypeCard({ image, title, selected, onPress }: Props) {
   return (
     <TouchableOpacity
       style={[s.card, selected && s.cardActive]}
       onPress={onPress}
       activeOpacity={0.85}>
-      {/* h-48 (192px) image with margin + rounded */}
       <View style={s.imgWrap}>
         <Image source={{ uri: image }} style={s.img} contentFit="cover" />
       </View>
-      {/* Title centered */}
       <View style={s.titleWrap}>
-        <Text style={[s.title, selected && s.titleActive]}>{title}</Text>
+        <Text style={[s.title, selected && s.titleActive]} numberOfLines={2}>{title}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -43,25 +41,26 @@ export default function EventTypeCard({ image, title, selected, onPress }: Props
 
 const s = StyleSheet.create({
   card: {
-    width: W,
+    width: '100%',
     backgroundColor: Colors.neutralWhite,
     borderRadius: 16,
     borderWidth: 2,
     borderColor: Colors.neutralGrayLight,
-    overflow: 'hidden',
+    overflow: 'hidden',         // clips the image to the card's rounded top
   },
   cardActive: {
     borderColor: Colors.primary,
     backgroundColor: Colors.primaryLight,
   },
+  // Image fills the card edge-to-edge. The card's `overflow: 'hidden'` +
+  // `borderRadius: 16` clips the top corners; no inner margin or radius
+  // needed on the image itself.
   imgWrap: {
-    margin: 10,
-    borderRadius: 12,
-    overflow: 'hidden',
-    height: 160,
+    width: '100%',
+    aspectRatio: 1,
   },
   img: { width: '100%', height: '100%' },
-  titleWrap: { paddingHorizontal: 12, paddingBottom: 12, paddingTop: 4 },
-  title: { fontSize: 16, fontWeight: '500', color: Colors.neutralBlack, textAlign: 'center' },
-  titleActive: { color: Colors.primary, fontWeight: '600' },
+  titleWrap: { paddingHorizontal: 8, paddingTop: 10, paddingBottom: 12 },
+  title: { fontSize: 14, fontWeight: '500', color: Colors.neutralBlack, textAlign: 'center', lineHeight: 18 },
+  titleActive: { color: Colors.primary, fontWeight: '700' },
 });

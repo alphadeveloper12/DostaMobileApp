@@ -45,13 +45,14 @@ import {
   ActivityIndicator,
   StyleSheet,
   Dimensions,
-  Animated,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { X, ChevronLeft, ChevronRight, Search } from 'lucide-react-native';
+import { X, Search, Send } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Carousel from '@/components/ui/Carousel';
+import AnimateOnScroll from '@/components/ui/AnimateOnScroll';
 import { useDispatch, useSelector } from 'react-redux';
 import { MotiView } from 'moti';
 import { Colors } from '@/utils/colors';
@@ -68,7 +69,7 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import MobileFooterNav from '@/components/layout/MobileFooterNav';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const { width: SCREEN_W } = Dimensions.get('window');
 
 // Exact slide data from SliderSection.tsx
 const DAY_SLIDES = [
@@ -100,6 +101,14 @@ const DAY_SLIDES = [
 ];
 
 // ── Vending Locator Sidebar ───────────────────────────────────────────────────
+// Faithful port of web Dosta/src/components/vending_home/HeroSection.tsx sidebar:
+//   - Slide-in from right, full screen height (incl. safe areas)
+//   - Header (smaller text on mobile per web), close button
+//   - Search input with adjacent send button (paper-airplane)
+//   - List/Map toggle pills
+//   - Location list cards with "Selected Location" badge
+//   - Sticky footer "Confirm & Close" — disabled until a location is picked,
+//     navigates to OrderNow when pressed (web routes to /vending-home/order-now)
 const VendingLocatorSidebar = ({
   visible,
   onClose,
@@ -115,6 +124,8 @@ const VendingLocatorSidebar = ({
   selectedLocation: any;
   onLocationSelect: (loc: any) => void;
 }) => {
+  const insets     = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView]   = useState<'list' | 'map'>('list');
 
@@ -129,19 +140,37 @@ const VendingLocatorSidebar = ({
       return 0;
     });
 
+  const handleConfirm = () => {
+    if (!selectedLocation) return;
+    onClose();
+    navigation.navigate('OrderNow');
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={onClose}
+      statusBarTranslucent>
       <View style={sidebarStyles.backdrop}>
         <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} />
-        {/* Sidebar panel — slides from right */}
-        <MotiView
-          from={{ translateX: SCREEN_W }}
-          animate={{ translateX: 0 }}
-          exit={{ translateX: SCREEN_W }}
-          transition={{ type: 'spring', stiffness: 250, damping: 30 }}
-          style={sidebarStyles.panel}>
+        {/* Wrapper handles positioning (top: 0 → bottom: 0 along the right
+            edge) so the inner MotiView only handles the slide animation.
+            Decoupling these makes the layout deterministic — MotiView's
+            flex behaviour can be flaky when also doing transform animations. */}
+        <View style={sidebarStyles.panelWrap} pointerEvents="box-none">
+          <MotiView
+            from={{ translateX: SCREEN_W }}
+            animate={{ translateX: 0 }}
+            exit={{ translateX: SCREEN_W }}
+            transition={{ type: 'spring', stiffness: 250, damping: 30 }}
+            style={[
+              sidebarStyles.panel,
+              { paddingTop: insets.top },
+            ]}>
 
-          {/* Header */}
+          {/* Header — web: text-[20px] font-[600] mobile, py-[18px] px-[15px] */}
           <View style={sidebarStyles.header}>
             <Text style={sidebarStyles.headerTitle}>Vending Locator</Text>
             <TouchableOpacity
@@ -151,7 +180,7 @@ const VendingLocatorSidebar = ({
             </TouchableOpacity>
           </View>
 
-          {/* Search input */}
+          {/* Search input + send button (paper-airplane), matches web layout */}
           <View style={sidebarStyles.searchRow}>
             <View style={sidebarStyles.searchBox}>
               <Search size={18} color="#9CA3AF" style={{ marginRight: 8 }} />
@@ -163,6 +192,9 @@ const VendingLocatorSidebar = ({
                 onChangeText={setSearchQuery}
               />
             </View>
+            <TouchableOpacity style={sidebarStyles.sendBtn} activeOpacity={0.7}>
+              <Send size={16} color={Colors.neutralBlack} />
+            </TouchableOpacity>
           </View>
 
           {/* List/Map toggle */}
@@ -188,46 +220,47 @@ const VendingLocatorSidebar = ({
             </View>
           </View>
 
-          {/* List content */}
+          {/* List content — flex:1 so it scrolls between toggle and footer */}
           {activeView === 'list' && (
             <ScrollView
               style={sidebarStyles.listScroll}
-              contentContainerStyle={sidebarStyles.listContent}>
+              contentContainerStyle={sidebarStyles.listContent}
+              showsVerticalScrollIndicator={false}>
               {status === 'loading' ? (
                 <ActivityIndicator color={Colors.primary} size="large" />
               ) : (
-                filtered.map((location: any) => (
-                  <View key={location.id} style={sidebarStyles.locationCard}>
-                    {/* Selected badge */}
-                    {selectedLocation?.id === location.id && (
-                      <View style={sidebarStyles.selectedBadge}>
-                        <Text style={sidebarStyles.selectedBadgeText}>
-                          Selected Location
-                        </Text>
-                      </View>
-                    )}
-                    <Text style={sidebarStyles.locationName}>
-                      {location.name}
-                    </Text>
-                    <Text style={sidebarStyles.locationInfo}>
-                      {location.info}
-                    </Text>
-                    {location.hours && (
+                filtered.map((location: any) => {
+                  const isSelected = selectedLocation?.id === location.id;
+                  return (
+                    <View key={location.id} style={sidebarStyles.locationCard}>
+                      {isSelected && (
+                        <View style={sidebarStyles.selectedBadge}>
+                          <Text style={sidebarStyles.selectedBadgeText}>
+                            Selected Location
+                          </Text>
+                        </View>
+                      )}
+                      <Text style={sidebarStyles.locationName}>
+                        {location.name}
+                      </Text>
                       <Text style={sidebarStyles.locationInfo}>
-                        {location.hours}
+                        {location.info}
                       </Text>
-                    )}
-                    <TouchableOpacity
-                      style={sidebarStyles.selectBtn}
-                      onPress={() => onLocationSelect(location)}>
-                      <Text style={sidebarStyles.selectBtnText}>
-                        {selectedLocation?.id === location.id
-                          ? 'Selected'
-                          : 'Select This Location'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                ))
+                      {location.hours && (
+                        <Text style={sidebarStyles.locationHours}>
+                          {location.hours}
+                        </Text>
+                      )}
+                      <TouchableOpacity
+                        style={sidebarStyles.selectBtn}
+                        onPress={() => onLocationSelect(location)}>
+                        <Text style={sidebarStyles.selectBtnText}>
+                          {isSelected ? 'Selected' : 'Select This Location'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })
               )}
             </ScrollView>
           )}
@@ -241,7 +274,29 @@ const VendingLocatorSidebar = ({
               </Text>
             </View>
           )}
+
+          {/* Footer — sticky "Confirm & Close" button. On Android the Modal
+              stops above the nav bar, so insets.bottom would double-count.
+              Use Math.max so iOS still clears the home indicator (~34px)
+              while Android stays a clean 16px from the panel edge. */}
+          <View
+            style={[
+              sidebarStyles.footer,
+              { paddingBottom: 2 },
+            ]}>
+            <TouchableOpacity
+              style={[
+                sidebarStyles.confirmBtn,
+                !selectedLocation && sidebarStyles.confirmBtnDisabled,
+              ]}
+              onPress={handleConfirm}
+              disabled={!selectedLocation}
+              activeOpacity={0.85}>
+              <Text style={sidebarStyles.confirmBtnText}>Confirm & Close</Text>
+            </TouchableOpacity>
+          </View>
         </MotiView>
+        </View>
       </View>
     </Modal>
   );
@@ -337,94 +392,100 @@ const VendingHeroSection = () => {
         vendingLocations={vendingLocations}
         status={status}
         selectedLocation={selectedLocation}
-        onLocationSelect={(loc) => {
-          handleLocationSelect(loc);
-          setSidebarVisible(false);
-        }}
+        onLocationSelect={handleLocationSelect}
       />
     </>
   );
 };
 
 // ── Day Meal Carousel (SliderSection) ────────────────────────────────────────
+// Faithful port of web Dosta/src/components/vending_home/SliderSection.tsx:
+//  - Heading: "Explore Our Daily Menu" with embedded "View our complete menu" link
+//  - 5 day slides (Mon–Fri), each tappable → /vending-home/menu (VendingMenu)
+//  - Each slide: image bg + bottom-weighted dark gradient + day h3 + blurb
+//  - Dots below; selected dot is wider (matches web w-6 vs w-2.5)
+//  - Arrows are hidden on mobile in the web ("hidden md:block"), so we omit them
 const SliderSection = () => {
   const navigation  = useNavigation<any>();
   const carouselRef = useRef<any>(null);
   const [activeIdx, setActiveIdx] = useState(0);
 
+  const goToMenu = () => navigation.navigate('VendingMenu');
+
   return (
     <View style={sliderStyles.section}>
-      <Text style={sliderStyles.sectionTitle}>Weekly Meal Preview</Text>
+      <AnimateOnScroll>
+        <View style={sliderStyles.headWrap}>
+          {/* h2 text-[28px] leading-[36px] font-bold text-[#032F55] */}
+          <Text style={sliderStyles.sectionTitle}>Explore Our Daily Menu</Text>
+          {/* p text-base font-[700] (mobile) text-[#032F55] with embedded link */}
+          <Text style={sliderStyles.sectionSubtitle}>
+            Daily menu of 13 chef-prepared meals, available Monday to Friday.{' '}
+            <Text style={sliderStyles.subtitleLink} onPress={goToMenu}>
+              View our complete menu
+            </Text>
+          </Text>
+        </View>
+      </AnimateOnScroll>
 
-      <Carousel
-        ref={carouselRef}
-        width={SCREEN_W - 32}
-        height={300}
-        loop
-        data={DAY_SLIDES}
-        scrollAnimationDuration={600}
-        onSnapToItem={setActiveIdx}
-        style={{ marginHorizontal: 16 }}
-        renderItem={({ item }) => (
-          <View style={sliderStyles.slide}>
-            <Image
-              source={{ uri: item.img }}
-              style={sliderStyles.slideImg}
-              contentFit="cover"
-            />
-            <View style={sliderStyles.slideOverlay} />
-            <View style={sliderStyles.slideContent}>
-              <Text style={sliderStyles.dayLabel}>{item.day}</Text>
-              <Text style={sliderStyles.blurb}>{item.blurb}</Text>
-            </View>
-          </View>
-        )}
-      />
+      <AnimateOnScroll delay={150}>
+        <Carousel
+          ref={carouselRef}
+          width={SCREEN_W - 32}
+          height={256}
+          loop
+          data={DAY_SLIDES}
+          scrollAnimationDuration={600}
+          onSnapToItem={setActiveIdx}
+          style={{ marginHorizontal: 16 }}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              activeOpacity={0.92}
+              onPress={goToMenu}
+              style={sliderStyles.slideTouch}>
+              <View style={sliderStyles.slide}>
+                <Image
+                  source={{ uri: item.img }}
+                  style={sliderStyles.slideImg}
+                  contentFit="cover"
+                />
+                {/* bg-gradient-to-t from-black/65 via-black/25 to-transparent */}
+                <LinearGradient
+                  colors={[
+                    'rgba(0,0,0,0)',
+                    'rgba(0,0,0,0.25)',
+                    'rgba(0,0,0,0.65)',
+                  ]}
+                  locations={[0, 0.5, 1]}
+                  style={StyleSheet.absoluteFillObject}
+                />
+                <View style={sliderStyles.slideContent}>
+                  {/* h3 text-xl font-semibold drop-shadow */}
+                  <Text style={sliderStyles.dayLabel}>{item.day}</Text>
+                  {/* p text-[11px] leading-snug opacity-85 mt-1 */}
+                  <Text style={sliderStyles.blurb}>{item.blurb}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      </AnimateOnScroll>
 
-      {/* Arrows */}
-      <View style={sliderStyles.arrows}>
-        <TouchableOpacity
-          style={sliderStyles.arrowBtn}
-          onPress={() => carouselRef.current?.prev()}>
-          <ChevronLeft size={14} color={Colors.neutralBlack} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={sliderStyles.arrowBtn}
-          onPress={() => carouselRef.current?.next()}>
-          <ChevronRight size={14} color={Colors.neutralBlack} />
-        </TouchableOpacity>
+      {/* Dots — selected w-6 bg-black/80, unselected w-2.5 bg-black/30 */}
+      <View style={sliderStyles.dotsRow}>
+        {DAY_SLIDES.map((_, i) => (
+          <TouchableOpacity
+            key={i}
+            onPress={() => carouselRef.current?.scrollTo(i)}
+            style={[sliderStyles.dot, i === activeIdx && sliderStyles.dotActive]}
+            accessibilityLabel="Go to slide"
+          />
+        ))}
       </View>
-
-      <TouchableOpacity
-        style={sliderStyles.viewMenuBtn}
-        onPress={() => navigation.navigate('VendingMenu')}>
-        <Text style={sliderStyles.viewMenuText}>View Full Menu</Text>
-      </TouchableOpacity>
     </View>
   );
 };
 
-// ── GetApp Section ────────────────────────────────────────────────────────────
-const GetApp = () => (
-  <View style={getAppStyles.section}>
-    <Text style={getAppStyles.title}>Get the Dosta App</Text>
-    <Text style={getAppStyles.subtitle}>
-      Manage your deliveries from anywhere, anytime.
-    </Text>
-    <View style={getAppStyles.badges}>
-      <Image
-        source={{ uri: 'https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg' }}
-        style={getAppStyles.badge}
-        contentFit="contain"
-      />
-      <Image
-        source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg' }}
-        style={getAppStyles.badge}
-        contentFit="contain"
-      />
-    </View>
-  </View>
-);
 
 // ── Newsletter (same as Home) ─────────────────────────────────────────────────
 const Newsletter = () => {
@@ -458,12 +519,11 @@ export default function VendingHomeScreen() {
   const insets = useSafeAreaInsets();
   return (
     <View style={{ flex: 1, backgroundColor: Colors.neutralWhite, paddingTop: insets.top }}>
-      <Header />
+      <Header variant="vending" />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 0 }}
         showsVerticalScrollIndicator={false}>
         <VendingHeroSection />
         <SliderSection />
-        <GetApp />
         <Newsletter />
         <Footer />
       </ScrollView>
@@ -475,7 +535,9 @@ export default function VendingHomeScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 const heroStyles = StyleSheet.create({
   container: {
-    height: 460,
+    // minHeight (not height) — lets the container grow if the title wraps to
+    // 2 lines on narrow phones instead of clipping the card.
+    minHeight: 480,
     position: 'relative',
   },
   bgImage: {
@@ -489,15 +551,16 @@ const heroStyles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
   },
   card: {
     width: '100%',
     maxWidth: 585,
     backgroundColor: Colors.neutralWhite,
     borderRadius: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingHorizontal: 20,
+    paddingVertical: 22,
     shadowColor: '#2B2B43',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.16,
@@ -505,35 +568,40 @@ const heroStyles = StyleSheet.create({
     elevation: 10,
   },
   cardTitle: {
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: '800',
     color: Colors.primary,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 10,
+    lineHeight: 32,
   },
   cardSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.neutralGrayDark,
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 24,
+    marginBottom: 16,
+    lineHeight: 20,
   },
   searchBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    height: 48,
     backgroundColor: Colors.neutralGrayLightest,
     borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    height: '100%',
+    fontSize: 14,
     color: Colors.neutralGrayDark,
+    paddingVertical: 0,             // kill Android default vertical padding
+    includeFontPadding: false,      // kill Android baseline padding
+    textAlignVertical: 'center',
   },
   searchIcon: {
-    marginLeft: -8,
+    marginLeft: 8,
   },
   browseLink: {
     fontSize: 14,
@@ -542,41 +610,55 @@ const heroStyles = StyleSheet.create({
   },
   mealBrowse: {
     width: '100%',
-    height: 60,
-    marginTop: 24,
+    height: 48,
+    marginTop: 16,
   },
 });
 
 const sidebarStyles = StyleSheet.create({
+  // backdrop is row-flex so the panel pushes to the right edge; default
+  // alignItems: stretch makes the panel fill vertically without a fixed height.
   backdrop: {
     flex: 1,
     flexDirection: 'row',
     backgroundColor: 'rgba(0,0,0,0.75)',
     justifyContent: 'flex-end',
   },
-  panel: {
+  // Wrapper anchors to the right edge of the modal, top:0 → bottom:0, with
+  // the configured panel width. Carries no animation — purely positioning.
+  panelWrap: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
     width: Math.min(SCREEN_W, 522),
-    height: SCREEN_H,
+  },
+  // Panel fills the wrapper. MotiView animates translateX on top of this.
+  panel: {
+    flex: 1,
+    width: '100%',
     backgroundColor: Colors.neutralWhite,
+    flexDirection: 'column',
     shadowColor: '#000',
     shadowOffset: { width: -4, height: 0 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 12,
   },
+  // Web mobile header: py-[18px] px-[15px], title text-[20px] leading-[28px] font-[600]
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 32,
-    paddingTop: 24,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 20,
+    lineHeight: 28,
+    fontWeight: '600',
     color: '#111827',
   },
   closeBtn: {
@@ -584,11 +666,16 @@ const sidebarStyles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#F3F4F6',
   },
+  // Search row — input + send (paper-airplane) button. Web: px-8 py-4 gap-2.
   searchRow: {
-    paddingHorizontal: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
     paddingVertical: 16,
   },
   searchBox: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.neutralGrayLightest,
@@ -600,15 +687,26 @@ const sidebarStyles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: Colors.neutralDark,
+    paddingVertical: 0,           // kill Android default padding
+    includeFontPadding: false,
+  },
+  sendBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.neutralGrayLightest,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   toggleRow: {
-    paddingHorizontal: 32,
+    paddingHorizontal: 16,
     paddingBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    backgroundColor: Colors.neutralWhite,
   },
   toggleContainer: {
     flexDirection: 'row',
@@ -642,8 +740,8 @@ const sidebarStyles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: 32,
-    paddingVertical: 32,
+    paddingHorizontal: 16,
+    paddingVertical: 24,
     gap: 16,
   },
   locationCard: {
@@ -659,7 +757,7 @@ const sidebarStyles = StyleSheet.create({
     marginBottom: 16,
   },
   selectedBadge: {
-    backgroundColor: Colors.green,
+    backgroundColor: Colors.green,        // bg-[#A7CF38]
     paddingVertical: 4,
     paddingHorizontal: 12,
     borderRadius: 999,
@@ -669,7 +767,7 @@ const sidebarStyles = StyleSheet.create({
   selectedBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: Colors.primary,
+    color: Colors.primary,                // text-[#054A86]
   },
   locationName: {
     fontSize: 20,
@@ -680,7 +778,11 @@ const sidebarStyles = StyleSheet.create({
   locationInfo: {
     fontSize: 14,
     color: '#4B5563',
-    marginBottom: 4,
+  },
+  locationHours: {
+    fontSize: 14,
+    color: '#4B5563',
+    marginTop: 4,                         // web: mt-1
   },
   selectBtn: {
     marginTop: 12,
@@ -701,107 +803,133 @@ const sidebarStyles = StyleSheet.create({
     justifyContent: 'center',
     padding: 32,
   },
+  // Sticky footer — Confirm & Close button. Web: bg-white p-4 full-width.
+  footer: {
+    backgroundColor: Colors.neutralWhite,
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  confirmBtn: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 8,                      // web: rounded-lg
+    backgroundColor: Colors.primary,      // bg-[#054A86]
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmBtnDisabled: {
+    backgroundColor: '#9CA3AF',           // web: bg-gray-400
+  },
+  confirmBtnText: {
+    color: Colors.neutralWhite,
+    fontWeight: '500',
+    fontSize: 15,
+  },
 });
 
 const sliderStyles = StyleSheet.create({
+  // section: web `main-container` + py-12 (48px). On mobile we tighten slightly.
   section: {
-    paddingTop: 48,
-    paddingBottom: 48,
+    paddingTop: 32,
+    paddingBottom: 32,
     backgroundColor: Colors.neutralWhite,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.primary,
+  // header block — centered, gap-2 between title and subtitle (mb-8 below)
+  headWrap: {
+    alignItems: 'center',
     paddingHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 24,
   },
+  // h2 text-[28px] leading-[36px] font-bold text-[#032F55]
+  sectionTitle: {
+    fontSize: 26,
+    lineHeight: 32,
+    fontWeight: '700',
+    color: '#032F55',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  // p text-base font-[700] text-[#032F55] (mobile bold per web max-md rule)
+  sectionSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '700',
+    color: '#032F55',
+    textAlign: 'center',
+  },
+  // <Link className="underline text-[#056AC1]">
+  subtitleLink: {
+    color: '#056AC1',
+    textDecorationLine: 'underline',
+    fontWeight: '700',
+  },
+  // each slide is wrapped in a TouchableOpacity for the click → /vending-home/menu
+  slideTouch: {
+    flex: 1,
+  },
+  // .group h-64 w-full overflow-hidden rounded-2xl shadow
   slide: {
+    flex: 1,
     borderRadius: 16,
     overflow: 'hidden',
-    height: 300,
     position: 'relative',
+    backgroundColor: '#000',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
   },
   slideImg: {
     ...StyleSheet.absoluteFillObject,
   },
-  slideOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
+  // .absolute bottom-0 left-0 right-0 p-4 text-white
   slideContent: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
-    padding: 20,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: 16,
   },
+  // h3 text-xl font-semibold drop-shadow
   dayLabel: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '600',
     color: Colors.neutralWhite,
-    marginBottom: 8,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
+  // p text-[11px] leading-snug opacity-85 mt-1
   blurb: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-    lineHeight: 20,
+    fontSize: 11,
+    lineHeight: 14,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 4,
   },
-  arrows: {
+  // .mt-4 flex items-center justify-center gap-2
+  dotsRow: {
+    marginTop: 16,
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-    paddingRight: 16,
-    marginTop: 12,
-  },
-  arrowBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: Colors.neutralBlack,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
   },
-  viewMenuBtn: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    backgroundColor: Colors.primary,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
+  // unselected dot — h-2.5 w-2.5 rounded-full bg-black/30
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
-  viewMenuText: {
-    color: Colors.neutralWhite,
-    fontWeight: '700',
-    fontSize: 14,
+  // selected dot — h-2.5 w-6 rounded-full bg-black/80
+  dotActive: {
+    width: 24,
+    backgroundColor: 'rgba(0,0,0,0.8)',
   },
 });
 
-const getAppStyles = StyleSheet.create({
-  section: {
-    backgroundColor: Colors.background,
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: Colors.primary,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.neutralGrayDark,
-    marginBottom: 16,
-  },
-  badges: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  badge: {
-    height: 40,
-    width: 130,
-  },
-});
 
 const nlStyles = StyleSheet.create({
   wrap: {

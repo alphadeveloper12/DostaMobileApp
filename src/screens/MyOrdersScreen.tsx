@@ -280,7 +280,7 @@ export default function MyOrdersScreen() {
     if (stopPolling) return;
     try {
       const token = await getAuthToken();
-      if (!token) { navigation.navigate('SignIn'); return; }
+      if (!token) { navigation.replace('SignIn'); return; }
       const res = await axios.get(`${BASE_URL}/api/vending/orders/`, {
         headers: { Authorization: `Token ${token}` },
       });

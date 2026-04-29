@@ -1,20 +1,8 @@
 /**
- * Carousel — drop-in replacement for react-native-reanimated-carousel.
- * Uses FlatList with pagingEnabled + auto-play timer.
- * Zero external dependencies beyond React Native core.
- *
- * API mirrors the subset of react-native-reanimated-carousel we use:
- *   <Carousel
- *     width={number}
- *     height={number}
- *     data={array}
- *     renderItem={({ item, index }) => JSX}
- *     autoPlay?={boolean}
- *     autoPlayInterval?={number}   (ms, default 3000)
- *     scrollAnimationDuration?={number}
- *     onSnapToItem?={(index) => void}
- *     loop?={boolean}
- *   />
+ * Carousel — horizontal ScrollView-based pager with autoplay.
+ * Uses ScrollView (not FlatList) because programmatic scrollTo is reliable on Android,
+ * whereas FlatList.scrollToIndex/scrollToOffset can silently no-op when pagingEnabled
+ * is on and a snap is mid-flight.
  */
 
 import React, {
@@ -26,9 +14,11 @@ import React, {
   useImperativeHandle,
 } from 'react';
 import {
-  FlatList,
+  ScrollView,
   View,
   Dimensions,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from 'react-native';
 
 interface CarouselProps<T> {
@@ -58,85 +48,86 @@ function CarouselInner<T>(
     height = 300,
     autoPlay = false,
     autoPlayInterval = 3000,
-    scrollAnimationDuration = 600,
     onSnapToItem,
-    loop = true,
     style,
   }: CarouselProps<T>,
   ref: React.Ref<CarouselRef>,
 ) {
-  const flatListRef = useRef<FlatList<T>>(null);
-  const currentIndex  = useRef(0);
-  const [, setRender] = useState(0); // force re-render for index tracking
+  const scrollRef = useRef<ScrollView>(null);
+  const currentIndex = useRef(0);
+  const userInteracting = useRef(false);
+  const [activeIndex, setActiveIndex] = useState(0);
 
-  const scrollToIndex = useCallback(
+  const goTo = useCallback(
     (index: number, animated = true) => {
       const count = data.length;
-      if (!count) return;
+      if (!count || !scrollRef.current) return;
       const safeIndex = ((index % count) + count) % count;
       currentIndex.current = safeIndex;
-      flatListRef.current?.scrollToIndex({
-        index: safeIndex,
+      scrollRef.current.scrollTo({
+        x: safeIndex * width,
+        y: 0,
         animated,
-        viewPosition: 0,
       });
+      setActiveIndex(safeIndex);
       onSnapToItem?.(safeIndex);
-      setRender((n) => n + 1);
     },
-    [data.length, onSnapToItem],
+    [data.length, width, onSnapToItem],
   );
 
-  // Expose prev/next/scrollTo for arrow buttons (VendingHomeScreen)
   useImperativeHandle(ref, () => ({
-    next: () => scrollToIndex(currentIndex.current + 1),
-    prev: () => scrollToIndex(currentIndex.current - 1),
-    scrollTo: scrollToIndex,
+    next: () => goTo(currentIndex.current + 1),
+    prev: () => goTo(currentIndex.current - 1),
+    scrollTo: goTo,
   }));
 
-  // Auto-play
   useEffect(() => {
     if (!autoPlay || data.length < 2) return;
     const interval = setInterval(() => {
-      scrollToIndex(currentIndex.current + 1);
+      if (userInteracting.current) return;
+      goTo(currentIndex.current + 1);
     }, autoPlayInterval);
     return () => clearInterval(interval);
-  }, [autoPlay, autoPlayInterval, data.length, scrollToIndex]);
+  }, [autoPlay, autoPlayInterval, data.length, goTo]);
+
+  const handleScrollBeginDrag = useCallback(() => {
+    userInteracting.current = true;
+  }, []);
 
   const handleMomentumScrollEnd = useCallback(
-    (e: any) => {
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      userInteracting.current = false;
       const offsetX = e.nativeEvent.contentOffset.x;
-      const index   = Math.round(offsetX / width);
-      currentIndex.current = index;
-      onSnapToItem?.(index);
-      setRender((n) => n + 1);
+      const index = Math.round(offsetX / width);
+      if (index !== currentIndex.current) {
+        currentIndex.current = index;
+        setActiveIndex(index);
+        onSnapToItem?.(index);
+      }
     },
     [width, onSnapToItem],
   );
 
   return (
-    <FlatList<T>
-      ref={flatListRef}
-      data={data}
-      renderItem={({ item, index }) => (
-        <View style={{ width, height }}>
-          {renderItem({ item, index })}
-        </View>
-      )}
-      keyExtractor={(_, i) => String(i)}
+    <ScrollView
+      ref={scrollRef}
       horizontal
       pagingEnabled
       showsHorizontalScrollIndicator={false}
+      onScrollBeginDrag={handleScrollBeginDrag}
       onMomentumScrollEnd={handleMomentumScrollEnd}
-      getItemLayout={(_, index) => ({
-        length: width,
-        offset: width * index,
-        index,
-      })}
       style={[{ width, height }, style]}
+      contentContainerStyle={{ height }}
       scrollEventThrottle={16}
       decelerationRate="fast"
       bounces={false}
-    />
+      overScrollMode="never">
+      {data.map((item, index) => (
+        <View key={index} style={{ width, height }}>
+          {renderItem({ item, index })}
+        </View>
+      ))}
+    </ScrollView>
   );
 }
 

@@ -32,7 +32,7 @@ import {
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Check, Minus, Plus, X } from 'lucide-react-native';
+import { Check, Minus, Plus, X, ChevronDown } from 'lucide-react-native';
 import axios from 'axios';
 import { useDispatch } from 'react-redux';
 import { MotiView } from 'moti';
@@ -43,6 +43,7 @@ import MobileFooterNav from '@/components/layout/MobileFooterNav';
 import BreadCrumb from '@/components/ui/BreadCrumb';
 import Shimmer from '@/components/ui/Shimmer';
 import AuthPromptModal from '@/components/common/AuthPromptModal';
+import ImageLightbox from '@/components/common/ImageLightbox';
 import { syncLocalCart } from '@/store/slices/cartSlice';
 import {
   getAuthToken, getSelectedLocation,
@@ -96,119 +97,397 @@ const StepCard = ({ status, children }: { status: StepStatus; children: React.Re
     <View style={[s.card, status === 'active' && s.cardActive]}>{children}</View>
   );
 
-// ── Menu item card (Order Now / Smart Grab) ────────────────────────────────────
-const FoodCard = ({ item, qty, onAdd, onRemove, onPress, isSoldOut, isLocked }: any) => (
-  <TouchableOpacity
-    style={[s.foodCard, (isSoldOut || isLocked) && { opacity: 0.6 }]}
-    onPress={onPress}
-    disabled={isLocked}
-    activeOpacity={0.85}>
-    <View style={s.foodImgWrap}>
-      <Image source={{ uri: item.imgSrc || item.image_url }} style={s.foodImg} contentFit="cover" placeholder={{ color: Colors.neutralGrayLightest }} />
-      {isLocked && (
-        <View style={s.foodOverlay}>
-          <View style={[s.foodBadge, { backgroundColor: Colors.orange }]}>
-            <Text style={s.foodBadgeText}>LOCKED</Text>
+// ── Menu item card — faithful port of web MenuCard.tsx (mobile sizing) ───────
+//   - Single-line heading (text-[14px] line-clamp-1)
+//   - 2-line description (text-[11px] line-clamp-2)
+//   - Inline quantity stepper next to price (no separate "Add" row)
+//   - Card border becomes blue (#054A86) when item is in cart
+//   - Tap card → opens detail sidebar; +/- buttons stop propagation
+const FoodCard = ({ item, qty, onAdd, onRemove, onPress, isSoldOut, isLocked }: any) => {
+  const inCart = qty > 0;
+  return (
+    <TouchableOpacity
+      style={[
+        s.foodCard,
+        inCart && s.foodCardSelected,
+        (isSoldOut || isLocked) && { opacity: 0.6 },
+      ]}
+      onPress={onPress}
+      disabled={isLocked}
+      activeOpacity={0.85}>
+
+      {/* Image — web mobile h-[120px] rounded-[12px] */}
+      <View style={s.foodImgWrap}>
+        <Image
+          source={{ uri: item.imgSrc || item.image_url }}
+          style={s.foodImg}
+          contentFit="cover"
+          placeholder={{ color: Colors.neutralGrayLightest }}
+        />
+        {isLocked && (
+          <View style={s.foodOverlay}>
+            <View style={[s.foodBadge, { backgroundColor: Colors.orange }]}>
+              <Text style={s.foodBadgeText}>LOCKED</Text>
+            </View>
           </View>
-        </View>
-      )}
-      {!isLocked && isSoldOut && (
-        <View style={s.foodOverlay}>
-          <View style={[s.foodBadge, { backgroundColor: '#EF4444' }]}>
-            <Text style={s.foodBadgeText}>SOLD OUT</Text>
+        )}
+        {!isLocked && isSoldOut && (
+          <View style={s.foodOverlay}>
+            <View style={[s.foodBadge, { backgroundColor: '#EF4444' }]}>
+              <Text style={s.foodBadgeText}>SOLD OUT</Text>
+            </View>
           </View>
-        </View>
-      )}
-    </View>
-    <Text style={s.foodName} numberOfLines={2}>{item.heading || item.name}</Text>
-    <Text style={s.foodDesc} numberOfLines={1}>{item.description}</Text>
-    <Text style={s.foodPrice}>{item.price}</Text>
-    {qty > 0 ? (
-      <View style={s.qtyRow}>
-        <TouchableOpacity style={s.qtyBtn} onPress={onRemove}><Minus size={12} color={Colors.neutralBlack} /></TouchableOpacity>
-        <Text style={s.qtyText}>{qty}</Text>
-        <TouchableOpacity style={s.qtyBtn} onPress={onAdd}><Plus size={12} color={Colors.neutralBlack} /></TouchableOpacity>
+        )}
       </View>
-    ) : (
-      <TouchableOpacity style={s.addBtn} onPress={onAdd} disabled={isSoldOut || isLocked}>
-        <Text style={s.addBtnText}>+ Add</Text>
-      </TouchableOpacity>
-    )}
-  </TouchableOpacity>
-);
+
+      {/* Heading — text-[14px] leading-[20px] font-[700] line-clamp-1 */}
+      <Text style={s.foodName} numberOfLines={1}>
+        {item.heading || item.name}
+      </Text>
+      {/* Description — text-[11px] leading-[16px] line-clamp-2 #83859C */}
+      <Text style={s.foodDesc} numberOfLines={2}>
+        {item.description}
+      </Text>
+
+      {/* Bottom row — price | inline qty stepper or + button (web pattern) */}
+      <View style={s.foodFooter}>
+        <Text style={s.foodPrice}>{item.price}</Text>
+
+        {inCart ? (
+          <View style={s.qtyStepper}>
+            <TouchableOpacity
+              onPress={(e: any) => { e?.stopPropagation?.(); onRemove(); }}
+              style={s.qtyStepBtn}
+              hitSlop={6}>
+              <Minus size={14} color={Colors.neutralBlack} />
+            </TouchableOpacity>
+            <Text style={s.qtyStepText}>{qty}</Text>
+            <TouchableOpacity
+              onPress={(e: any) => { e?.stopPropagation?.(); onAdd(); }}
+              style={s.qtyStepBtn}
+              hitSlop={6}>
+              <Plus size={14} color={Colors.neutralBlack} />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={(e: any) => { e?.stopPropagation?.(); onAdd(); }}
+            disabled={isSoldOut || isLocked}
+            style={s.foodPlusBtn}
+            hitSlop={6}>
+            <Plus size={22} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 // ── Weekly plan day grid ───────────────────────────────────────────────────────
+// Faithful port of web Dosta/src/components/vending_home/PlanWeekly.tsx (mobile):
+//   - Title "Choose meals for each weekday :"
+//   - Day dropdown (web mobile uses <select>)  + Saved Plans button
+//   - Status row "Selected for {day}: ..." / "Total: N Meals"
+//   - Pickup Time per day dropdown (when timeSlots provided)
+//   - 2-col FoodCard grid (web `grid-cols-2 gap-[12px]`)
+//   - Tap card → opens detail sidebar; +/- inline stepper limited to 3
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const FEATURES = ['Select your favorite', 'Preselected For You'];
 
-const WeeklyPlanPicker = ({ apiMenuData, weekPlan, setWeekPlan, onConfirm }: {
-  apiMenuData: any; weekPlan: any; setWeekPlan: (p: any) => void; onConfirm: () => void;
+const formatItem = (raw: any) => ({
+  ...raw,
+  id:       raw.id,
+  imgSrc:   raw.image_url || raw.imgSrc,
+  // Mirrors web `imgSrc2: it.image2_url || it.image_url` — the second image
+  // is the one rendered inside the detail panel and full-screen preview.
+  imgSrc2:  raw.image2_url || raw.imgSrc2 || raw.image_url || raw.imgSrc,
+  imgAlt:   `food-${raw.id}`,
+  heading:  raw.name || raw.heading,
+  description: raw.description,
+  price:    typeof raw.price === 'string' && raw.price.startsWith('AED')
+    ? raw.price
+    : `AED ${parseFloat(raw.price || 0).toFixed(2)}`,
+});
+
+const WeeklyPlanPicker = ({
+  apiMenuData,
+  weekPlan,
+  setWeekPlan,
+  weekNumber = 1,
+  timeSlots = [],
+  dayPickupSlots = {},
+  setDayPickupSlots,
+  defaultSlotId,
+  onItemPress,
+  onConfirm,
+  onReset,
+  loading,
+}: {
+  apiMenuData: any;
+  weekPlan: any;
+  setWeekPlan: (p: any) => void;
+  weekNumber?: number;
+  timeSlots?: any[];
+  dayPickupSlots?: Record<string, number>;
+  setDayPickupSlots?: (cb: any) => void;
+  defaultSlotId?: number | null;
+  onItemPress?: (item: any) => void;
+  onConfirm?: () => void;
+  onReset?: () => void;
+  loading?: boolean;
 }) => {
   const [selectedDay, setSelectedDay] = useState(DAYS[0]);
-  const dayItems = apiMenuData?.week_menu?.[selectedDay]?.items || [];
-  const selectedDayItems = weekPlan[selectedDay] || [];
-  const totalMeals = DAYS.reduce((a, d) => a + (weekPlan[d]?.length || 0), 0);
+  const [feature, setFeature]         = useState<number | null>(null);
+  const [dayPickerOpen, setDayPickerOpen] = useState(false);
+  const [timePickerOpen, setTimePickerOpen] = useState(false);
 
-  const toggleItem = (item: any) => {
-    const curr = weekPlan[selectedDay] || [];
+  const dayItems = useMemo(() => {
+    // Tolerate every shape the API or the parent might hand us:
+    //   weekly flat:        { Monday: { items: [...] }, ... }
+    //   weekly wrapped:     { week_menu: { Monday: {...} } }
+    //   monthly per-week:   { menu: { Monday: { items: [...] } } }
+    //   monthly already unwrapped (web pattern): { Monday: { items: [...] } }
+    const root =
+      apiMenuData?.week_menu ||
+      apiMenuData?.menu      ||
+      apiMenuData             ||
+      null;
+    const raw = root?.[selectedDay]?.items
+             || (Array.isArray(root?.[selectedDay]) ? root[selectedDay] : null)
+             || [];
+    return raw.map(formatItem);
+  }, [apiMenuData, selectedDay]);
+
+  const selectedDayItems: any[] = Array.isArray(weekPlan[selectedDay]) ? weekPlan[selectedDay] : [];
+  const totalMealsForDay = selectedDayItems.reduce((a, i) => a + (i.quantity || 1), 0);
+
+  // Mirror of web handleQuantityChange — caps quantity at 3
+  const changeQty = (item: any, delta: number) => {
+    const curr = Array.isArray(weekPlan[selectedDay]) ? weekPlan[selectedDay] : [];
     const idx  = curr.findIndex((i: any) => i.id === item.id);
+    let next   = [...curr];
     if (idx >= 0) {
-      setWeekPlan({ ...weekPlan, [selectedDay]: curr.filter((_: any, i: number) => i !== idx) });
-    } else {
-      setWeekPlan({ ...weekPlan, [selectedDay]: [...curr, { ...item, heading: item.name, imgSrc: item.image_url, price: `AED ${parseFloat(item.price).toFixed(2)}`, quantity: 1 }] });
+      const newQ = next[idx].quantity + delta;
+      if (newQ <= 0) next.splice(idx, 1);
+      else if (newQ > 3) return;
+      else next[idx] = { ...next[idx], quantity: newQ };
+    } else if (delta > 0) {
+      next.push({ ...item, day_of_week: selectedDay, week_number: weekNumber, quantity: 1 });
     }
+    setWeekPlan({ ...weekPlan, [selectedDay]: next });
   };
+
+  const slotKey   = `${weekNumber}-${selectedDay}`;
+  const activeSlotId = dayPickupSlots[slotKey] || defaultSlotId || null;
+  const activeSlotLabel = timeSlots.find((s: any) => s.id === activeSlotId)?.label || 'Select time';
 
   return (
     <View>
-      {/* Day tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 12 }}>
-        {DAYS.map(day => (
+      {/* Title */}
+      <Text style={wp.title}>Choose meals for each weekday :</Text>
+
+      {/* Two preset toggle buttons (matches web FEATURES row) */}
+      <View style={wp.featureRow}>
+        {FEATURES.map((label, idx) => (
           <TouchableOpacity
-            key={day}
-            style={[s.dayTab, selectedDay === day && s.dayTabActive]}
-            onPress={() => setSelectedDay(day)}>
-            <Text style={[s.dayTabText, selectedDay === day && s.dayTabTextActive]}>{day}</Text>
-            {(weekPlan[day]?.length || 0) > 0 && (
-              <View style={s.dayBadge}>
-                <Text style={s.dayBadgeText}>{weekPlan[day].length}</Text>
-              </View>
-            )}
+            key={label}
+            style={[wp.featureBtn, feature === idx && wp.featureBtnActive]}
+            onPress={() => setFeature(idx)}
+            activeOpacity={0.85}>
+            <Text
+              style={[wp.featureBtnText, feature === idx && wp.featureBtnTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}>
+              {label}
+            </Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
 
-      {/* Items for selected day */}
+      {/* Day dropdown + Saved Plans (web mobile layout) */}
+      <View style={wp.dayRow}>
+        <TouchableOpacity
+          style={wp.dayDropdown}
+          onPress={() => setDayPickerOpen(true)}
+          activeOpacity={0.85}>
+          <Text style={wp.dayDropdownText}>{selectedDay}</Text>
+          <ChevronDown size={14} color={Colors.primary} />
+        </TouchableOpacity>
+        <View style={wp.savedBtn}>
+          <Text style={wp.savedBtnText}>Saved Plans</Text>
+        </View>
+      </View>
+
+      {/* Status row — Selected for X: ... + Total: N Meals */}
+      <View style={wp.statusBlock}>
+        <Text style={wp.statusText} numberOfLines={2}>
+          {selectedDayItems.length === 0
+            ? 'No selected meals'
+            : `Selected for ${selectedDay}: ${selectedDayItems.map((i: any) => `${i.heading}${i.quantity > 1 ? ` (x${i.quantity})` : ''}`).join(', ')}`}
+        </Text>
+        <Text style={wp.statusTotalText}>
+          Total: <Text style={wp.statusTotalBold}>{totalMealsForDay} {totalMealsForDay === 1 ? 'Meal' : 'Meals'}</Text>
+        </Text>
+      </View>
+
+      {/* Pickup Time per day */}
+      {timeSlots.length > 0 && (
+        <View style={wp.pickupRow}>
+          <Text style={wp.pickupLabel}>Pickup Time:</Text>
+          <TouchableOpacity
+            style={wp.pickupDropdown}
+            onPress={() => setTimePickerOpen(true)}
+            activeOpacity={0.85}>
+            <Text style={wp.pickupDropdownText} numberOfLines={1}>
+              {activeSlotLabel}
+            </Text>
+            <ChevronDown size={14} color={Colors.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* 2-col food card grid */}
       {dayItems.length === 0 ? (
-        <View style={{ padding: 24, alignItems: 'center' }}>
+        <View style={{ padding: 16, alignItems: 'center' }}>
           <Text style={{ color: Colors.neutralGray }}>No menu items for {selectedDay}</Text>
         </View>
       ) : (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
           {dayItems.map((item: any) => {
-            const sel = selectedDayItems.some((s: any) => s.id === item.id);
+            const sel = selectedDayItems.find((i: any) => i.id === item.id);
+            const qty = sel?.quantity || 0;
             return (
-              <TouchableOpacity
-                key={item.id}
-                style={[s.weekItem, sel && s.weekItemActive]}
-                onPress={() => toggleItem(item)}>
-                <Image source={{ uri: item.image_url }} style={s.weekItemImg} contentFit="cover" />
-                <Text style={[s.weekItemName, sel && { color: Colors.primary }]} numberOfLines={2}>
-                  {item.name}
-                </Text>
-                <Text style={s.weekItemPrice}>AED {parseFloat(item.price).toFixed(2)}</Text>
-                {sel && <View style={s.checkCircle}><Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>✓</Text></View>}
-              </TouchableOpacity>
+              <View key={item.id} style={{ width: '47%' }}>
+                <FoodCard
+                  item={item}
+                  qty={qty}
+                  onAdd={() => changeQty(item, +1)}
+                  onRemove={() => changeQty(item, -1)}
+                  onPress={() => onItemPress?.({
+                    ...item,
+                    _ctx: 'weekly',
+                    _day: selectedDay,
+                    _week: weekNumber,
+                    // Pass the setter directly. The parent's Add handler will
+                    // use a functional setState against this — that way no
+                    // closure staleness, no routing mistakes.
+                    _setter: setWeekPlan,
+                  })}
+                />
+              </View>
             );
           })}
         </View>
       )}
 
-      <View style={{ marginTop: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ fontSize: 14, color: Colors.neutralGrayDark }}>{totalMeals} meals selected</Text>
-        <TouchableOpacity style={[s.contBtn, { flex: 0, paddingHorizontal: 24 }]} onPress={onConfirm} disabled={totalMeals === 0}>
-          <Text style={s.contBtnText}>Confirm Week</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Inline action buttons (web mobile: Reset + Confirm and review).
+          Sits at the bottom of the picker — no floating bar on weekly. */}
+      {(() => {
+        const totalMealsInPlan = Object.values(weekPlan).reduce(
+          (planTotal: number, day: any) =>
+            Array.isArray(day)
+              ? planTotal + day.reduce((dt: number, i: any) => dt + (i?.quantity || 0), 0)
+              : planTotal,
+          0,
+        );
+        const canReset   = selectedDayItems.length > 0;
+        const canConfirm = totalMealsInPlan > 0;
+        return (
+          <View style={wp.actionsCol}>
+            {canReset && (
+              <TouchableOpacity
+                style={wp.resetBtn}
+                onPress={onReset}
+                activeOpacity={0.85}>
+                <Text style={wp.resetBtnText}>Reset</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[wp.confirmBtn, !canConfirm && wp.confirmBtnDisabled]}
+              disabled={!canConfirm || loading}
+              onPress={onConfirm}
+              activeOpacity={0.85}>
+              {loading ? (
+                <ActivityIndicator color={Colors.neutralWhite} />
+              ) : (
+                <Text style={[wp.confirmBtnText, !canConfirm && wp.confirmBtnTextDisabled]}>
+                  Confirm and review
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        );
+      })()}
+
+      {/* Day picker modal */}
+      <Modal
+        visible={dayPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDayPickerOpen(false)}>
+        <TouchableWithoutFeedback onPress={() => setDayPickerOpen(false)}>
+          <View style={wp.modalBackdrop}>
+            <TouchableWithoutFeedback>
+              <View style={wp.modalSheet}>
+                <Text style={wp.modalTitle}>Choose a day</Text>
+                {DAYS.map((d, idx) => {
+                  const isActive = selectedDay === d;
+                  const count    = (weekPlan[d]?.length || 0);
+                  return (
+                    <TouchableOpacity
+                      key={d}
+                      style={[wp.modalItem, isActive && wp.modalItemActive]}
+                      onPress={() => { setSelectedDay(d); setDayPickerOpen(false); }}>
+                      <Text style={[wp.modalItemText, isActive && wp.modalItemTextActive]}>
+                        {d}{count > 0 ? ` (${count})` : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* Pickup time picker modal */}
+      <Modal
+        visible={timePickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTimePickerOpen(false)}>
+        <TouchableWithoutFeedback onPress={() => setTimePickerOpen(false)}>
+          <View style={wp.modalBackdrop}>
+            <TouchableWithoutFeedback>
+              <View style={wp.modalSheet}>
+                <Text style={wp.modalTitle}>Pickup time for {selectedDay}</Text>
+                {timeSlots.map((slot: any) => {
+                  const isActive = slot.id === activeSlotId;
+                  return (
+                    <TouchableOpacity
+                      key={slot.id}
+                      style={[wp.modalItem, isActive && wp.modalItemActive]}
+                      onPress={() => {
+                        if (setDayPickupSlots) {
+                          setDayPickupSlots((prev: Record<string, number>) => ({
+                            ...prev,
+                            [slotKey]: slot.id,
+                          }));
+                        }
+                        setTimePickerOpen(false);
+                      }}>
+                      <Text style={[wp.modalItemText, isActive && wp.modalItemTextActive]}>
+                        {slot.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 };
@@ -260,6 +539,9 @@ export default function OrderNowScreen() {
   // UI
   const [selectedItem,  setSelectedItem]  = useState<any>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  // URI of the image being shown full-screen inside <ImageLightbox>, or null
+  // when closed. Mirrors web `lightboxOpen` + `selectedItem.imgSrc2`.
+  const [lightboxUri,   setLightboxUri]   = useState<string | null>(null);
   const [loading,       setLoading]       = useState(false);
   const [menuLoading,   setMenuLoading]   = useState(false);
 
@@ -459,7 +741,8 @@ export default function OrderNowScreen() {
           setApiWeeklyMenu(res.data);
         } else if (planType === 'monthly') {
           const res = await axios.get(`${BASE_URL}/api/vending/menu/plan/MONTHLY/`, { headers: hdrs });
-          setApiMonthlyMenu(res.data);
+          // Match web: store the month_menu array directly so [wk-1].menu indexing works.
+          setApiMonthlyMenu(res.data?.month_menu || null);
         }
       } catch { } finally { setMenuLoading(false); }
     };
@@ -482,22 +765,152 @@ export default function OrderNowScreen() {
     }));
   }, [machineGoods]);
 
-  // Order Now items enriched with machine availability
-  const { availableItems, otherItems } = useMemo(() => {
-    if (machineGoods === null) return { availableItems: [], otherItems: apiOrderNowMenu };
-    if (machineGoods.length === 0) return { availableItems: [], otherItems: apiOrderNowMenu };
-    const available: any[] = []; const others: any[] = [];
-    apiOrderNowMenu.forEach(item => {
+  // Order Now items enriched with machine availability — mirrors web Menu.tsx
+  // useMemo. Builds shelfData (shelf-organized cards), availableItems (flat
+  // fallback when no shelves), otherItems (not in machine), and a count.
+  const { availableItems, otherItems, shelfData, totalAvailableCount } = useMemo(() => {
+    if (machineGoods === null) {
+      return { availableItems: [], otherItems: apiOrderNowMenu, shelfData: [], totalAvailableCount: 0 };
+    }
+    if (machineGoods.length === 0) {
+      return { availableItems: [], otherItems: apiOrderNowMenu, shelfData: [], totalAvailableCount: 0 };
+    }
+
+    const available: any[] = [];
+    const others: any[]    = [];
+
+    // Lookup menu items by normalized name (web's foodLookup)
+    const foodLookup = new Map<string, any>();
+    apiOrderNowMenu.forEach((item: any) =>
+      foodLookup.set(normalizeName(item.heading), item),
+    );
+
+    // Process machineShelves: enrich each spot with its menu item
+    const processedShelves = (machineShelves || [])
+      .map((shelf: any) => ({
+        ...shelf,
+        spots: (shelf.spots || []).map((spot: any) => {
+          if (!spot.goods) return { ...spot, enrichedItem: null };
+          const normalizedName = normalizeName(spot.goods.goodsName);
+          const menuItem = foodLookup.get(normalizedName);
+          if (menuItem) {
+            return {
+              ...spot,
+              enrichedItem: {
+                ...menuItem,
+                vendingGoodUuid: spot.goods.uuid,
+                quantity: 1,
+                availableQuantity: spot.presentNumber,
+                locked: spot.goods.locked || false,
+              },
+            };
+          }
+          return { ...spot, enrichedItem: null };
+        }),
+      }))
+      // Web rule: keep shelves that have at least one in-stock spot
+      .filter((shelf: any) =>
+        shelf.spots.some(
+          (s: any) => s.enrichedItem !== null && s.presentNumber > 0,
+        ),
+      );
+
+    // Build flat available/others lists (used when no shelves data)
+    apiOrderNowMenu.forEach((item: any) => {
       const normItem = normalizeName(item.heading);
-      const match = machineGoods.find(g => normalizeName(g.goodsName || '') === normItem);
-      if (match && (match.presentNumber > 0 || match.presentNumber === undefined)) {
-        available.push({ ...item, vendingGoodUuid: match.uuid });
-      } else {
-        others.push(item);
-      }
+      let matchedUuid: string | undefined;
+      const isAvailable = machineGoods.some((good: any) => {
+        const rawName = typeof good === 'string' ? good : good?.goodsName || '';
+        if (normalizeName(rawName) === normItem) {
+          matchedUuid = typeof good === 'object' ? good.uuid : undefined;
+          if (typeof good === 'object' && good.presentNumber !== undefined && good.presentNumber <= 0) {
+            return false;
+          }
+          return true;
+        }
+        return false;
+      });
+
+      const enriched = { ...item, vendingGoodUuid: matchedUuid };
+      if (isAvailable) available.push(enriched);
+      else             others.push(enriched);
     });
-    return { availableItems: available, otherItems: others };
-  }, [apiOrderNowMenu, machineGoods]);
+
+    const uniqueAvailable = Array.from(
+      new Map(available.map((i: any) => [i.heading, i])).values(),
+    );
+    const availableNames = new Set(uniqueAvailable.map((i: any) => i.heading));
+    const uniqueOthers = Array.from(
+      new Map(
+        others
+          .filter((i: any) => !availableNames.has(i.heading))
+          .map((i: any) => [i.heading, i]),
+      ).values(),
+    );
+
+    const totalCount = processedShelves.length > 0
+      ? processedShelves.reduce(
+          (acc: number, shelf: any) =>
+            acc +
+            shelf.spots.filter(
+              (s: any) => s.enrichedItem !== null && s.presentNumber > 0,
+            ).length,
+          0,
+        )
+      : uniqueAvailable.length;
+
+    return {
+      // When shelves exist, web hides the flat availableItems list
+      availableItems:    processedShelves.length > 0 ? [] : uniqueAvailable,
+      otherItems:        uniqueOthers,
+      shelfData:         processedShelves,
+      totalAvailableCount: totalCount,
+    };
+  }, [apiOrderNowMenu, machineGoods, machineShelves]);
+
+  // ── Floating bottom bar (web "Sticky Footer Mobile") ─────────────────────────
+  // Shows on the active step 4+ with the running cart count and a primary
+  // "Confirm and review" CTA. Visible across all order types.
+  const totalMealsInStep = useMemo(() => {
+    if (orderType === 'Order Now')  return orderNowMenu.reduce((a, i) => a + (i.quantity || 1), 0);
+    if (orderType === 'Smart Grab') return smartGrabMenu.reduce((a, i) => a + (i.quantity || 1), 0);
+    if (orderType === 'Start a Plan' && planType === 'weekly') {
+      return DAYS.reduce((a, d) => a + (weekMenu[d]?.length || 0), 0);
+    }
+    if (orderType === 'Start a Plan' && planType === 'monthly') {
+      const wm = activeStep === 4 ? weekMenu1
+              : activeStep === 5 ? weekMenu2
+              : activeStep === 6 ? weekMenu3
+              : weekMenu4;
+      return DAYS.reduce((a, d) => a + (wm[d]?.length || 0), 0);
+    }
+    return 0;
+  }, [orderType, planType, activeStep, orderNowMenu, smartGrabMenu, weekMenu, weekMenu1, weekMenu2, weekMenu3, weekMenu4]);
+
+  const handleResetCart = useCallback(() => {
+    Alert.alert(
+      'Reset Menu Selection?',
+      'Are you sure you want to reset your menu selection?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: () => {
+            if (orderType === 'Order Now')  setOrderNowMenu([]);
+            else if (orderType === 'Smart Grab') setSmartGrabMenu([]);
+            else if (orderType === 'Start a Plan' && planType === 'weekly')  setWeekMenu({});
+            else if (orderType === 'Start a Plan' && planType === 'monthly') {
+              if (activeStep === 4) setWeekMenu1({});
+              if (activeStep === 5) setWeekMenu2({});
+              if (activeStep === 6) setWeekMenu3({});
+              if (activeStep === 7) setWeekMenu4({});
+            }
+          },
+        },
+      ],
+    );
+  }, [orderType, planType, activeStep]);
 
   // ── handleConfirmStep — POST /api/vending/cart/ ──────────────────────────────
   const handleConfirmStep = useCallback(async () => {
@@ -512,12 +925,29 @@ export default function OrderNowScreen() {
     let items: any[] = [];
 
     const buildItem = (item: any, dayOfWeek: string | null, weekNum: number | null) => ({
+      // Stable per-day-and-week id so CartScreen handlers (which key by
+      // `item.id`) can reliably find/update/delete this row. The authed path
+      // gets server-assigned ids; guests use this synthetic one.
+      id:               Math.floor(Math.random() * 1_000_000_000),
       menu_item_id:     item.id,
       quantity:         item.quantity || 1,
       day_of_week:      dayOfWeek,
       week_number:      weekNum,
       vending_good_uuid:item.vendingGoodUuid || null,
       pickup_slot_id:   weekNum && dayOfWeek ? (dayPickupSlots?.[`${weekNum}-${dayOfWeek}`] || null) : null,
+      // Include the nested menu_item object so the guest path has enough
+      // data to render the cart screen. The authed path doesn't need it
+      // (the backend hydrates it on POST), but for guests this payload
+      // goes straight to AsyncStorage and CartScreen.mapCartToUI filters
+      // out any item without `menu_item` set.
+      menu_item: {
+        id:          item.id,
+        name:        item.heading || item.name || 'Item',
+        price:       (item.price || '0').toString().replace('AED ', '').trim(),
+        image_url:   item.imgSrc || item.image_url || '',
+        description: item.description || '',
+        heating:     item.heating || 'no',
+      },
     });
 
     if (orderType === 'Order Now') {
@@ -556,26 +986,49 @@ export default function OrderNowScreen() {
       current_step:   activeStep + 1,
     };
 
+    // ⚡ Advance the step UI IMMEDIATELY so the user always sees forward
+    // motion when they tap Confirm. The cart sync below is best-effort —
+    // a network error must not leave the user stuck on the current step.
+    if (!isLast) {
+      setMaxCompleted(activeStep);
+      setActiveStep(activeStep + 1);
+    }
+
     setLoading(true);
+    let apiSaved = true;
     try {
       const token = await getAuthToken();
       if (token) {
-        await axios.post(`${BASE_URL}/api/vending/cart/`, payload, { headers: { Authorization: `Token ${token}` } });
+        try {
+          await axios.post(
+            `${BASE_URL}/api/vending/cart/`,
+            payload,
+            { headers: { Authorization: `Token ${token}` } },
+          );
+        } catch (err) {
+          apiSaved = false;
+          console.warn('Cart sync failed:', err);
+        }
       } else {
-        await setGuestCart(payload);
-        dispatch(syncLocalCart(payload.items || []));
+        try {
+          await setGuestCart(payload);
+          dispatch(syncLocalCart(payload.items || []));
+        } catch (err) {
+          apiSaved = false;
+          console.warn('Guest cart save failed:', err);
+        }
       }
 
-      // If last step → go to cart
+      // Last step: only navigate to Cart if the cart was actually saved.
       if (isLast) {
-        navigation.navigate('Cart');
-        return;
+        if (apiSaved) {
+          navigation.navigate('Cart');
+        } else {
+          Alert.alert('Error', 'Failed to save cart. Please try again.');
+        }
       }
-
-      setMaxCompleted(activeStep);
-      setActiveStep(activeStep + 1);
     } catch (err) {
-      Alert.alert('Error', 'Failed to save cart. Please try again.');
+      console.warn('handleConfirmStep unexpected error:', err);
     } finally {
       setLoading(false);
     }
@@ -594,7 +1047,7 @@ export default function OrderNowScreen() {
 
   return (
     <View style={[main.screen, { paddingTop: insets.top }]}>
-      <Header />
+      <Header variant="vending" />
 
       {/* Page title */}
       <View style={main.titleArea}>
@@ -602,7 +1055,20 @@ export default function OrderNowScreen() {
         <Text style={main.pageTitle}>Vending Pickup</Text>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 16 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          padding: 16,
+          gap: 16,
+          // Reserve room for the floating bar only when it's actually rendered
+          // (Order Now / Smart Grab on step 4+). Weekly/Monthly use inline buttons.
+          paddingBottom:
+            step4Status !== 'pending' &&
+            (orderType === 'Order Now' || orderType === 'Smart Grab')
+              ? 200
+              : 32,
+        }}
+        showsVerticalScrollIndicator={false}>
 
         {/* ── STEP 1: Pickup Location ─────────────────────────── */}
         <StepCard status={step1Status}>
@@ -764,29 +1230,16 @@ export default function OrderNowScreen() {
               )}
 
               <Text style={s.descText}>Select a timeframe to pickup your meal</Text>
+              <Text style={[s.descText, { fontSize: 12, color: Colors.neutralGray }]}>
+                Sub copy if needed
+              </Text>
 
-              {/* Time slot picker */}
-              {time ? (
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.primaryLight, borderRadius: 12, padding: 12 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.primary }}>Selected: {time}</Text>
-                  <TouchableOpacity onPress={() => setShowTimeModal(true)}>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.primaryBlue, textDecorationLine: 'underline' }}>Change</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <TouchableOpacity style={s.primaryBtn} onPress={() => setShowTimeModal(true)}>
-                  <Text style={s.primaryBtnText}>Select Timeframe</Text>
-                </TouchableOpacity>
-              )}
-
-              {time && (
-                <TouchableOpacity
-                  style={[s.primaryBtn, !time && s.primaryBtnDisabled]}
-                  onPress={() => { setMaxCompleted(3); setActiveStep(4); }}
-                  disabled={!time}>
-                  <Text style={s.primaryBtnText}>Confirm</Text>
-                </TouchableOpacity>
-              )}
+              {/* Web step 3 has a single CTA — "Select Timeframe" — that opens
+                  the sidebar. The sidebar's own Confirm advances the step,
+                  so there's no duplicate Confirm here. */}
+              <TouchableOpacity style={s.primaryBtn} onPress={() => setShowTimeModal(true)}>
+                <Text style={s.primaryBtnText}>Select Timeframe</Text>
+              </TouchableOpacity>
             </View>
           )}
         </StepCard>
@@ -815,65 +1268,154 @@ export default function OrderNowScreen() {
             </View>
             {step4Status === 'active' && (
               <View style={{ marginTop: 12 }}>
+                {/* Header text — web Menu mobile copy */}
+                <Text style={s.menuHeader}>Choose Your Meal</Text>
+                <Text style={s.menuSubHeader}>
+                  Choose your meal from our daily menu of {totalAvailableCount} chef-prepared meals
+                </Text>
+                {machineGoods === null && (
+                  <Text style={s.checkingText}>Checking availability…</Text>
+                )}
+
                 {menuLoading ? <Shimmer /> : (
                   <>
-                    {availableItems.length > 0 && (
-                      <>
-                        <Text style={s.subHeader}>Available Now ({availableItems.length})</Text>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-                          {availableItems.map((item: any) => {
-                            const qty = orderNowMenu.find(i => i.id === item.id)?.quantity || 0;
-                            return (
-                              <FoodCard
-                                key={item.id} item={item} qty={qty}
-                                onAdd={() => setOrderNowMenu(prev => {
-                                  const idx = prev.findIndex(i => i.id === item.id);
-                                  return idx >= 0 ? prev.map((i, j) => j === idx ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { ...item, quantity: 1 }];
-                                })}
-                                onRemove={() => setOrderNowMenu(prev => {
-                                  const idx = prev.findIndex(i => i.id === item.id);
-                                  if (idx < 0) return prev;
-                                  const newQ = prev[idx].quantity - 1;
-                                  return newQ <= 0 ? prev.filter((_, j) => j !== idx) : prev.map((i, j) => j === idx ? { ...i, quantity: newQ } : i);
-                                })}
-                                onPress={() => setSelectedItem(item)}
-                              />
-                            );
-                          })}
+                    {/* SHELF-ORGANIZED LAYOUT — primary path, matches web exactly */}
+                    {shelfData.length > 0 ? (
+                      shelfData.map((shelf: any) => (
+                        <View key={shelf.shelfIndex} style={s.shelfSection}>
+                          <View style={s.shelfHeader}>
+                            <View style={s.shelfAccent} />
+                            <Text style={s.shelfName}>{shelf.shelfName}</Text>
+                          </View>
+                          {/* Web: grid grid-cols-2 gap-[12px] — 2 cards per row */}
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                            {shelf.spots
+                              .filter((spot: any) => spot.enrichedItem !== null)
+                              .map((spot: any, idx: number) => {
+                                const data      = spot.enrichedItem;
+                                const isSoldOut = spot.presentNumber <= 0;
+                                const isLocked  = spot.goods?.locked || false;
+                                const qty       = orderNowMenu.find(i => i.id === data.id)?.quantity || 0;
+
+                                return (
+                                  // Width belongs on the wrapper so flex-wrap
+                                  // knows each item is half-width — the FoodCard
+                                  // itself fills the wrapper.
+                                  <View key={idx} style={{ position: 'relative', width: '47.5%' }}>
+                                    {/* Spot N badge — web bg-[#054A86] -top-1.5 -left-1.5 */}
+                                    <View style={s.spotBadge}>
+                                      <Text style={s.spotBadgeText}>Spot {spot.arrivalName}</Text>
+                                    </View>
+                                    <FoodCard
+                                      item={data}
+                                      qty={qty}
+                                      isSoldOut={isSoldOut}
+                                      isLocked={isLocked}
+                                      onAdd={() => {
+                                        if (isSoldOut || isLocked) return;
+                                        setOrderNowMenu(prev => {
+                                          const i = prev.findIndex(p => p.id === data.id);
+                                          return i >= 0
+                                            ? prev.map((p, j) => j === i ? { ...p, quantity: p.quantity + 1 } : p)
+                                            : [...prev, { ...data, quantity: 1 }];
+                                        });
+                                      }}
+                                      onRemove={() => setOrderNowMenu(prev => {
+                                        const i = prev.findIndex(p => p.id === data.id);
+                                        if (i < 0) return prev;
+                                        const newQ = prev[i].quantity - 1;
+                                        return newQ <= 0
+                                          ? prev.filter((_, j) => j !== i)
+                                          : prev.map((p, j) => j === i ? { ...p, quantity: newQ } : p);
+                                      })}
+                                      onPress={() => !isLocked && setSelectedItem(data)}
+                                    />
+                                    {/* "Only N left" badge — web shows when stock < 5 */}
+                                    {!isSoldOut && !isLocked && spot.presentNumber > 0 && spot.presentNumber < 5 && (
+                                      <View style={s.stockBadge}>
+                                        <Text style={s.stockBadgeText}>Only {spot.presentNumber} left</Text>
+                                      </View>
+                                    )}
+                                  </View>
+                                );
+                              })}
+                          </View>
                         </View>
+                      ))
+                    ) : machineGoods !== null ? (
+                      /* Machine loaded but no shelves match — web's "No Items" empty state */
+                      <View style={s.emptyShelf}>
+                        <View style={s.emptyShelfIconWrap}>
+                          <X size={48} color="#D1D5DB" />
+                        </View>
+                        <Text style={s.emptyShelfTitle}>No Items Available</Text>
+                        <Text style={s.emptyShelfMsg}>
+                          Sorry, there are no items currently available at this location.
+                        </Text>
+                      </View>
+                    ) : (
+                      /* Fallback: machine API not configured — show flat list */
+                      <>
+                        {availableItems.length > 0 && (
+                          <>
+                            <Text style={s.subHeader}>Available Now ({availableItems.length})</Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                              {availableItems.map((item: any) => {
+                                const qty = orderNowMenu.find(i => i.id === item.id)?.quantity || 0;
+                                return (
+                                  <View key={item.id} style={{ width: '48%' }}>
+                                    <FoodCard
+                                      item={item} qty={qty}
+                                      onAdd={() => setOrderNowMenu(prev => {
+                                        const i = prev.findIndex(p => p.id === item.id);
+                                        return i >= 0 ? prev.map((p, j) => j === i ? { ...p, quantity: p.quantity + 1 } : p) : [...prev, { ...item, quantity: 1 }];
+                                      })}
+                                      onRemove={() => setOrderNowMenu(prev => {
+                                        const i = prev.findIndex(p => p.id === item.id);
+                                        if (i < 0) return prev;
+                                        const newQ = prev[i].quantity - 1;
+                                        return newQ <= 0 ? prev.filter((_, j) => j !== i) : prev.map((p, j) => j === i ? { ...p, quantity: newQ } : p);
+                                      })}
+                                      onPress={() => setSelectedItem(item)}
+                                    />
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          </>
+                        )}
+                        {otherItems.length > 0 && (
+                          <>
+                            <Text style={s.subHeader}>All Menu Items</Text>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                              {otherItems.map((item: any) => {
+                                const qty = orderNowMenu.find(i => i.id === item.id)?.quantity || 0;
+                                return (
+                                  <View key={item.id} style={{ width: '48%' }}>
+                                    <FoodCard
+                                      item={item} qty={qty}
+                                      onAdd={() => setOrderNowMenu(prev => {
+                                        const i = prev.findIndex(p => p.id === item.id);
+                                        return i >= 0 ? prev.map((p, j) => j === i ? { ...p, quantity: p.quantity + 1 } : p) : [...prev, { ...item, quantity: 1 }];
+                                      })}
+                                      onRemove={() => setOrderNowMenu(prev => {
+                                        const i = prev.findIndex(p => p.id === item.id);
+                                        if (i < 0) return prev;
+                                        const newQ = prev[i].quantity - 1;
+                                        return newQ <= 0 ? prev.filter((_, j) => j !== i) : prev.map((p, j) => j === i ? { ...p, quantity: newQ } : p);
+                                      })}
+                                      onPress={() => setSelectedItem(item)}
+                                    />
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          </>
+                        )}
                       </>
                     )}
-                    {otherItems.length > 0 && (
-                      <>
-                        <Text style={s.subHeader}>All Menu Items</Text>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-                          {otherItems.map((item: any) => {
-                            const qty = orderNowMenu.find(i => i.id === item.id)?.quantity || 0;
-                            return (
-                              <FoodCard
-                                key={item.id} item={item} qty={qty}
-                                onAdd={() => setOrderNowMenu(prev => {
-                                  const idx = prev.findIndex(i => i.id === item.id);
-                                  return idx >= 0 ? prev.map((i, j) => j === idx ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { ...item, quantity: 1 }];
-                                })}
-                                onRemove={() => setOrderNowMenu(prev => {
-                                  const idx = prev.findIndex(i => i.id === item.id);
-                                  if (idx < 0) return prev;
-                                  const newQ = prev[idx].quantity - 1;
-                                  return newQ <= 0 ? prev.filter((_, j) => j !== idx) : prev.map((i, j) => j === idx ? { ...i, quantity: newQ } : i);
-                                })}
-                                onPress={() => setSelectedItem(item)}
-                              />
-                            );
-                          })}
-                        </View>
-                      </>
-                    )}
-                    {orderNowMenu.length > 0 && (
-                      <TouchableOpacity style={[s.primaryBtn, { marginTop: 16 }]} onPress={handleConfirmStep} disabled={loading}>
-                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryBtnText}>Confirm ({orderNowMenu.reduce((a, i) => a + i.quantity, 0)} meals) → Go to Cart</Text>}
-                      </TouchableOpacity>
-                    )}
+
+                    {/* Confirm CTA lives in the floating bar at the bottom */}
                   </>
                 )}
               </View>
@@ -910,29 +1452,27 @@ export default function OrderNowScreen() {
                         const qty = smartGrabMenu.find(i => i.id === item.id)?.quantity || 0;
                         const isSoldOut = (item.presentNumber !== undefined && item.presentNumber <= 0);
                         return (
-                          <FoodCard
-                            key={item.id} item={item} qty={qty}
-                            isSoldOut={isSoldOut} isLocked={item.locked}
-                            onAdd={() => !isSoldOut && !item.locked && setSmartGrabMenu(prev => {
-                              const idx = prev.findIndex(i => i.id === item.id);
-                              return idx >= 0 ? prev.map((i, j) => j === idx ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { ...item, quantity: 1 }];
-                            })}
-                            onRemove={() => setSmartGrabMenu(prev => {
-                              const idx = prev.findIndex(i => i.id === item.id);
-                              if (idx < 0) return prev;
-                              const newQ = prev[idx].quantity - 1;
-                              return newQ <= 0 ? prev.filter((_, j) => j !== idx) : prev.map((i, j) => j === idx ? { ...i, quantity: newQ } : i);
-                            })}
-                            onPress={() => {}}
-                          />
+                          <View key={item.id} style={{ width: '48%' }}>
+                            <FoodCard
+                              item={item} qty={qty}
+                              isSoldOut={isSoldOut} isLocked={item.locked}
+                              onAdd={() => !isSoldOut && !item.locked && setSmartGrabMenu(prev => {
+                                const idx = prev.findIndex(i => i.id === item.id);
+                                return idx >= 0 ? prev.map((i, j) => j === idx ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { ...item, quantity: 1 }];
+                              })}
+                              onRemove={() => setSmartGrabMenu(prev => {
+                                const idx = prev.findIndex(i => i.id === item.id);
+                                if (idx < 0) return prev;
+                                const newQ = prev[idx].quantity - 1;
+                                return newQ <= 0 ? prev.filter((_, j) => j !== idx) : prev.map((i, j) => j === idx ? { ...i, quantity: newQ } : i);
+                              })}
+                              onPress={() => {}}
+                            />
+                          </View>
                         );
                       })}
                     </View>
-                    {smartGrabMenu.length > 0 && (
-                      <TouchableOpacity style={[s.primaryBtn, { marginTop: 16 }]} onPress={handleConfirmStep} disabled={loading}>
-                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryBtnText}>Confirm ({smartGrabMenu.reduce((a, i) => a + i.quantity, 0)} meals) → Go to Cart</Text>}
-                      </TouchableOpacity>
-                    )}
+                    {/* Confirm CTA lives in the floating bar at the bottom */}
                   </>
                 )}
               </View>
@@ -965,7 +1505,15 @@ export default function OrderNowScreen() {
                     apiMenuData={apiWeeklyMenu}
                     weekPlan={weekMenu}
                     setWeekPlan={setWeekMenu}
+                    weekNumber={1}
+                    timeSlots={timeSlots}
+                    dayPickupSlots={dayPickupSlots}
+                    setDayPickupSlots={setDayPickupSlots}
+                    defaultSlotId={timeSlots.find((sl: any) => sl.label === time)?.id || null}
+                    onItemPress={(item: any) => setSelectedItem(item)}
                     onConfirm={handleConfirmStep}
+                    onReset={handleResetCart}
+                    loading={loading}
                   />
                 )}
               </View>
@@ -985,7 +1533,7 @@ export default function OrderNowScreen() {
                 <View style={{ flex: 1, flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
                   <StepCircle n={stepNum} status={wkStatus} />
                   <View style={{ flex: 1 }}>
-                    <Text style={s.stepTitle}>Plan Week {wk} Menu</Text>
+                    <Text style={s.stepTitle}>Plan Your Week {wk} Menu</Text>
                     {wkStatus === 'completed' && (() => {
                       const { totalMeals, lines } = generatePlanSummary(wkMenu);
                       return <><Text style={s.stepSummary}>"{totalMeals} Meals"</Text>{lines.slice(0, 3).map((l, i) => <Text key={i} style={s.stepSummary}>{l}</Text>)}</>;
@@ -1000,10 +1548,20 @@ export default function OrderNowScreen() {
                 <View style={{ marginTop: 12 }}>
                   {menuLoading ? <Shimmer /> : (
                     <WeeklyPlanPicker
-                      apiMenuData={{ week_menu: apiMonthlyMenu?.month_menu?.[`week_${wk}`] ? Object.fromEntries(DAYS.map(d => [d, { items: apiMonthlyMenu.month_menu[`week_${wk}`]?.[d] || [] }])) : null }}
+                      // Web pattern: apiMonthlyMenu is the month_menu array;
+                      // pass the per-week entry so the picker can unwrap .menu.
+                      apiMenuData={apiMonthlyMenu?.[wk - 1] || null}
                       weekPlan={wkMenu}
                       setWeekPlan={setWkMenu}
+                      weekNumber={wk}
+                      timeSlots={timeSlots}
+                      dayPickupSlots={dayPickupSlots}
+                      setDayPickupSlots={setDayPickupSlots}
+                      defaultSlotId={timeSlots.find((sl: any) => sl.label === time)?.id || null}
+                      onItemPress={(item: any) => setSelectedItem(item)}
                       onConfirm={handleConfirmStep}
+                      onReset={handleResetCart}
+                      loading={loading}
                     />
                   )}
                 </View>
@@ -1014,68 +1572,305 @@ export default function OrderNowScreen() {
 
       </ScrollView>
 
-      {/* Time slot modal */}
-      <Modal visible={showTimeModal} transparent animationType="slide" onRequestClose={() => setShowTimeModal(false)}>
-        <TouchableWithoutFeedback onPress={() => setShowTimeModal(false)}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-            <TouchableWithoutFeedback>
-              <View style={{ backgroundColor: Colors.neutralWhite, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '60%' }}>
-                <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.neutralBlack, marginBottom: 16 }}>Select Timeframe</Text>
-                <ScrollView>
-                  {(timeSlots.length > 0 ? timeSlots : [
-                    { id: 1, label: '8:00 AM – 10:00 AM' },
-                    { id: 2, label: '10:00 AM – 12:00 PM' },
-                    { id: 3, label: '12:00 PM – 2:00 PM' },
-                    { id: 4, label: '2:00 PM – 4:00 PM' },
-                  ]).map((slot: any) => (
+      {/* Time slot sidebar — slides in from the right (web pattern, identical
+          to the Vending Locator sidebar). Selecting a slot only highlights
+          it; tapping the sticky "Confirm" button advances the step. */}
+      <Modal
+        visible={showTimeModal}
+        transparent
+        animationType="none"
+        onRequestClose={() => setShowTimeModal(false)}
+        statusBarTranslucent>
+        <View style={ts.backdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowTimeModal(false)}
+          />
+          <View style={ts.panelWrap} pointerEvents="box-none">
+            <MotiView
+              from={{ translateX: W }}
+              animate={{ translateX: 0 }}
+              exit={{ translateX: W }}
+              transition={{ type: 'spring', stiffness: 250, damping: 30 }}
+              style={[ts.panel, { paddingTop: insets.top }]}>
+
+              {/* Header — web mobile: text-[20px] leading-[24px] font-[600] */}
+              <View style={ts.header}>
+                <Text style={ts.headerTitle}>Select a Timeframe</Text>
+                <TouchableOpacity
+                  style={ts.closeBtn}
+                  onPress={() => setShowTimeModal(false)}>
+                  <X size={20} color="#4B5563" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Slot list — flex:1, scrollable between header and footer */}
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16 }}
+                showsVerticalScrollIndicator={false}>
+                {(timeSlots.length > 0 ? timeSlots : [
+                  { id: 1, label: '8:00 AM – 10:00 AM' },
+                  { id: 2, label: '10:00 AM – 12:00 PM' },
+                  { id: 3, label: '12:00 PM – 2:00 PM' },
+                  { id: 4, label: '2:00 PM – 4:00 PM' },
+                ]).map((slot: any) => {
+                  const isActive = time === slot.label;
+                  return (
                     <TouchableOpacity
                       key={slot.id}
-                      style={[{ paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, marginBottom: 8, borderWidth: 1 },
-                        time === slot.label ? { backgroundColor: Colors.primaryLight, borderColor: Colors.primary } : { borderColor: Colors.neutralGrayLight, backgroundColor: Colors.neutralWhite }]}
-                      onPress={() => { setTime(slot.label); setShowTimeModal(false); }}>
-                      <Text style={[{ fontSize: 16, fontWeight: '500' }, time === slot.label ? { color: Colors.primary } : { color: Colors.neutralBlack }]}>
+                      style={[ts.slot, isActive && ts.slotActive]}
+                      onPress={() => setTime(slot.label)}
+                      activeOpacity={0.85}>
+                      <Text style={[ts.slotText, isActive && ts.slotTextActive]}>
                         {slot.label}
                       </Text>
                     </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Sticky footer — Confirm + Close (web pattern) */}
+              <View
+                style={[
+                  ts.footer,
+                  { paddingBottom: Math.max(insets.bottom, 16) },
+                ]}>
+                <TouchableOpacity
+                  style={[ts.btnPrimary, !time && ts.btnDisabled]}
+                  disabled={!time}
+                  onPress={() => {
+                    setShowTimeModal(false);
+                    handleConfirmStep();
+                  }}
+                  activeOpacity={0.85}>
+                  <Text style={ts.btnPrimaryText}>Confirm</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={ts.btnOutline}
+                  onPress={() => setShowTimeModal(false)}
+                  activeOpacity={0.85}>
+                  <Text style={ts.btnOutlineText}>Close</Text>
+                </TouchableOpacity>
               </View>
-            </TouchableWithoutFeedback>
+            </MotiView>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
-      {/* Item detail modal */}
-      <Modal visible={!!selectedItem} transparent animationType="slide" onRequestClose={() => setSelectedItem(null)}>
-        <TouchableWithoutFeedback onPress={() => setSelectedItem(null)}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' }}>
-            <TouchableWithoutFeedback>
-              <View style={{ backgroundColor: Colors.neutralWhite, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
-                <Image source={{ uri: selectedItem?.imgSrc }} style={{ width: '100%', height: 220 }} contentFit="cover" />
-                <View style={{ padding: 20 }}>
-                  <Text style={{ fontSize: 22, fontWeight: '700', color: Colors.neutralBlack, marginBottom: 8 }}>{selectedItem?.heading}</Text>
-                  <Text style={{ fontSize: 14, color: Colors.neutralGrayDark, lineHeight: 20, marginBottom: 12 }}>{selectedItem?.description}</Text>
-                  <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.primary, marginBottom: 20 }}>{selectedItem?.price}</Text>
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <TouchableOpacity style={[s.primaryBtn, { flex: 1, backgroundColor: Colors.neutralWhite, borderWidth: 1, borderColor: Colors.primary }]} onPress={() => setSelectedItem(null)}>
-                      <Text style={[s.primaryBtnText, { color: Colors.primary }]}>Close</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[s.primaryBtn, { flex: 1 }]} onPress={() => {
-                      setOrderNowMenu(prev => {
-                        const idx = prev.findIndex(i => i.id === selectedItem.id);
-                        return idx >= 0 ? prev.map((i, j) => j === idx ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { ...selectedItem, quantity: 1 }];
-                      });
-                      setSelectedItem(null);
-                    }}>
-                      <Text style={s.primaryBtnText}>Add to Cart</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+      {/* Item detail sidebar — slides in from the right (matches web exactly).
+          Layout per web Menu.tsx:
+            heading + X close → image (h-60) → description → price
+            → optional offer/terms → footer with [Close] [+ Add] */}
+      <Modal
+        visible={!!selectedItem}
+        transparent
+        animationType="none"
+        onRequestClose={() => setSelectedItem(null)}
+        statusBarTranslucent>
+        <View style={ts.backdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={() => setSelectedItem(null)}
+          />
+          <View style={ts.panelWrap} pointerEvents="box-none">
+            <MotiView
+              from={{ translateX: W }}
+              animate={{ translateX: 0 }}
+              exit={{ translateX: W }}
+              transition={{ type: 'spring', stiffness: 250, damping: 30 }}
+              style={[ts.panel, { paddingTop: insets.top }]}>
+
+              {/* Header — heading text-[28px] font-[700] + X close (web layout) */}
+              <View style={id.header}>
+                <Text style={id.headerTitle} numberOfLines={2}>
+                  {selectedItem?.heading || selectedItem?.name}
+                </Text>
+                <TouchableOpacity
+                  style={id.closeBtn}
+                  onPress={() => setSelectedItem(null)}>
+                  <X size={20} color="#4B5563" />
+                </TouchableOpacity>
               </View>
-            </TouchableWithoutFeedback>
+
+              {/* Scrollable body — image, desc, price, offer, terms */}
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
+                showsVerticalScrollIndicator={false}>
+                {/* Detail-panel image — uses `imgSrc2` (image2_url) when
+                    available, falling back to the card image. Web parity:
+                    `selectedItem.imgSrc2 || selectedItem.imgSrc`. Tap to
+                    open the full-screen preview (lightbox). */}
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => {
+                    const uri =
+                      selectedItem?.imgSrc2 ||
+                      selectedItem?.image2_url ||
+                      selectedItem?.imgSrc ||
+                      selectedItem?.image_url;
+                    if (uri) setLightboxUri(uri);
+                  }}>
+                  <Image
+                    source={{
+                      uri:
+                        selectedItem?.imgSrc2 ||
+                        selectedItem?.image2_url ||
+                        selectedItem?.imgSrc ||
+                        selectedItem?.image_url,
+                    }}
+                    style={id.image}
+                    contentFit="cover"
+                  />
+                  <View style={id.previewHint}>
+                    <Text style={id.previewHintText}>Tap to preview</Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Body — p-5 space-y-4 in web */}
+                <View style={id.body}>
+                  {!!selectedItem?.description && (
+                    <Text style={id.description}>{selectedItem.description}</Text>
+                  )}
+                  {/* Price — text-[24px] leading-[32px] font-[700] */}
+                  <Text style={id.price}>{selectedItem?.price}</Text>
+
+                  {!!selectedItem?.offer && (
+                    <View style={id.offerBlock}>
+                      <Text style={id.offerText}>{selectedItem.offer}</Text>
+                    </View>
+                  )}
+                  {!!selectedItem?.terms && (
+                    <Text
+                      style={id.termsLink}
+                      onPress={() => navigation.navigate('Terms')}>
+                      Terms & conditions Apply
+                    </Text>
+                  )}
+                </View>
+              </ScrollView>
+
+              {/* Footer — Close (outline) + + Add (primary), web pattern */}
+              <View
+                style={[
+                  id.footer,
+                  { paddingBottom: Math.max(insets.bottom, 16) },
+                ]}>
+                <TouchableOpacity
+                  style={id.btnOutline}
+                  onPress={() => setSelectedItem(null)}
+                  activeOpacity={0.85}>
+                  <Text style={id.btnOutlineText}>Close</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={id.btnPrimary}
+                  onPress={() => {
+                    if (!selectedItem) return;
+                    const item: any = selectedItem;
+
+                    // Weekly/Monthly: the picker hands us its state setter
+                    // directly. Use a FUNCTIONAL update to avoid any stale
+                    // closure capture of the previous weekPlan reference.
+                    if (item._ctx === 'weekly' && typeof item._setter === 'function') {
+                      const day  = item._day  as string;
+                      const week = item._week as number;
+                      const itemId = item.id;
+
+                      item._setter((prev: any) => {
+                        const safe = prev && typeof prev === 'object' ? prev : {};
+                        const curr: any[] = Array.isArray(safe[day]) ? safe[day] : [];
+                        const i = curr.findIndex((p: any) => p.id === itemId);
+                        const next = [...curr];
+                        if (i >= 0) {
+                          if (next[i].quantity >= 3) return safe; // 3-meal cap
+                          next[i] = { ...next[i], quantity: next[i].quantity + 1 };
+                        } else {
+                          // Strip the meta props (_ctx/_day/_week/_setter) so
+                          // the cart shape stays clean.
+                          const { _ctx, _day, _week, _setter, ...clean } = item;
+                          next.push({ ...clean, day_of_week: day, week_number: week, quantity: 1 });
+                        }
+                        return { ...safe, [day]: next };
+                      });
+
+                      setSelectedItem(null);
+                      return;
+                    }
+
+                    // Order Now / Smart Grab — flat cart
+                    const list = orderType === 'Smart Grab' ? smartGrabMenu : orderNowMenu;
+                    const setList = orderType === 'Smart Grab' ? setSmartGrabMenu : setOrderNowMenu;
+                    const i = list.findIndex(p => p.id === selectedItem.id);
+                    setList(i >= 0
+                      ? list.map((p, j) => j === i ? { ...p, quantity: p.quantity + 1 } : p)
+                      : [...list, { ...selectedItem, quantity: 1 }]);
+                    setSelectedItem(null);
+                  }}
+                  activeOpacity={0.85}>
+                  <Text style={id.btnPrimaryText}>+ Add</Text>
+                </TouchableOpacity>
+              </View>
+            </MotiView>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
+
+      {/* Floating sticky CTA bar — web "fixed bottom-[94px] left-4 right-4".
+          Web shows this only for Order Now / Smart Grab on mobile.
+          Weekly / Monthly use inline buttons inside the WeeklyPlanPicker. */}
+      {step4Status !== 'pending' &&
+       (orderType === 'Order Now' || orderType === 'Smart Grab') && (
+        <View
+          pointerEvents="box-none"
+          style={[
+            fab.wrap,
+            { bottom: 70 + insets.bottom + 8 },
+          ]}>
+          <View style={fab.bar}>
+            <View style={fab.topRow}>
+              <View>
+                <Text style={fab.statusLabel}>
+                  {totalMealsInStep === 0 ? 'No selected meals' : `${totalMealsInStep} SELECTED`}
+                </Text>
+                <Text style={fab.totalText}>
+                  Total: {totalMealsInStep} {totalMealsInStep === 1 ? 'Meal' : 'Meals'}
+                </Text>
+              </View>
+              {totalMealsInStep > 0 && (
+                <TouchableOpacity onPress={handleResetCart} hitSlop={8}>
+                  <Text style={fab.resetText}>Reset</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity
+              style={[fab.confirmBtn, totalMealsInStep === 0 && fab.confirmBtnDisabled]}
+              disabled={totalMealsInStep === 0 || loading}
+              onPress={handleConfirmStep}
+              activeOpacity={0.85}>
+              {loading ? (
+                <ActivityIndicator color={Colors.neutralWhite} />
+              ) : (
+                <Text style={[
+                  fab.confirmBtnText,
+                  totalMealsInStep === 0 && fab.confirmBtnTextDisabled,
+                ]}>
+                  Confirm and review
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Full-screen image preview — mounted at the screen root so it
+          renders above the detail sheet (web parity: lightbox z-[100]
+          sits above the sidebar's z-50). */}
+      <ImageLightbox
+        visible={!!lightboxUri}
+        uri={lightboxUri}
+        onClose={() => setLightboxUri(null)}
+      />
 
       <MobileFooterNav />
     </View>
@@ -1116,21 +1911,153 @@ const s = StyleSheet.create({
   typeBtnTextActive:{ color: Colors.neutralBlack },
   descText:   { fontSize: 14, color: Colors.neutralGrayDark, lineHeight: 20 },
   subHeader:  { fontSize: 16, fontWeight: '700', color: Colors.neutralGrayDark, marginBottom: 8 },
-  // Food card
-  foodCard:   { width: (W - 56) / 2, backgroundColor: Colors.neutralWhite, borderRadius: 12, borderWidth: 1, borderColor: Colors.neutralGrayLightest, overflow: 'hidden', marginBottom: 4 },
-  foodImgWrap:{ width: '100%', height: 130, position: 'relative' },
+
+  // ── Step 4 Menu header (web Menu mobile header) ──────────────────────────
+  // text-[20px] font-bold text-[#054A86]
+  menuHeader: { fontSize: 20, fontWeight: '700', color: Colors.primary, marginBottom: 4 },
+  // text-[#545563] text-[13px] leading-[18px]
+  menuSubHeader: { fontSize: 13, color: Colors.neutralGrayDark, lineHeight: 18, marginBottom: 16 },
+  checkingText: { fontSize: 12, color: Colors.primary, fontWeight: '500', marginBottom: 16 },
+
+  // ── Shelf section (web bg-gray-50/50 rounded-[24px] p-4 border) ──────────
+  shelfSection: {
+    backgroundColor: 'rgba(249,250,251,0.5)',
+    borderRadius: 24,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    marginBottom: 24,
+  },
+  shelfHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  shelfAccent: {
+    width: 8,
+    height: 32,
+    backgroundColor: Colors.primary,
+    borderRadius: 999,
+  },
+  shelfName: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+
+  // ── Per-spot badges over the food card ─────────────────────────────────
+  // Web: -top-1.5 -left-1.5 bg-[#054A86] px-2 py-1 rounded-full
+  spotBadge: {
+    position: 'absolute',
+    top: -6,
+    left: -6,
+    zIndex: 10,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  spotBadgeText: {
+    color: Colors.neutralWhite,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  // Web: top-1.5 right-1.5 bg-orange-500 — "Only N left" warning
+  stockBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    zIndex: 10,
+    backgroundColor: Colors.orange,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  stockBadgeText: {
+    color: Colors.neutralWhite,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  // ── No-items empty state (web "No Items Available") ─────────────────────
+  emptyShelf: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+  },
+  emptyShelfIconWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#F9FAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyShelfTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.neutralBlack,
+    marginBottom: 8,
+  },
+  emptyShelfMsg: {
+    fontSize: 14,
+    color: '#83859C',
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 300,
+  },
+  // Food card — web MOBILE sizing (port of MenuCard.tsx):
+  //   border #EDEEF2 → #054A86 when in cart
+  //   px-2 pt-2 pb-4, rounded-[12px]
+  //   image h-[120px], rounded-[12px]
+  //   heading text-[14px] line-clamp-1
+  //   desc    text-[11px] line-clamp-2 #83859C
+  //   price   text-[13px] (left), qty stepper or + (right)
+  // The card itself fills its parent — call sites wrap it in a 48% View
+  // so flex-wrap can measure the wrapper and pack two per row.
+  foodCard:   {
+    width: '100%',
+    backgroundColor: Colors.neutralWhite,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.neutralGrayLightest, // #EDEEF2
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 12,
+    overflow: 'hidden',
+  },
+  foodCardSelected: {
+    borderColor: Colors.primary,             // #054A86 when item is in cart
+  },
+  foodImgWrap:{ width: '100%', height: 120, position: 'relative', borderRadius: 12, overflow: 'hidden' },
   foodImg:    { width: '100%', height: '100%' },
   foodOverlay:{ ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.2)' },
-  foodBadge:  { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
-  foodBadgeText:{ color: Colors.neutralWhite, fontSize: 10, fontWeight: '700' },
-  foodName:   { fontSize: 13, fontWeight: '700', color: Colors.neutralBlack, paddingHorizontal: 10, paddingTop: 8, lineHeight: 18 },
-  foodDesc:   { fontSize: 11, color: Colors.neutralGray, paddingHorizontal: 10, marginTop: 2, lineHeight: 16 },
-  foodPrice:  { fontSize: 13, fontWeight: '700', color: Colors.neutralBlack, paddingHorizontal: 10, marginTop: 4 },
-  qtyRow:     { flexDirection: 'row', alignItems: 'center', margin: 10, backgroundColor: Colors.neutralGrayLightest, borderRadius: 8, padding: 4 },
-  qtyBtn:     { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
-  qtyText:    { flex: 1, textAlign: 'center', fontSize: 13, fontWeight: '700', color: Colors.neutralBlack },
-  addBtn:     { margin: 10, backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 6, alignItems: 'center' },
-  addBtnText: { color: Colors.neutralWhite, fontSize: 12, fontWeight: '700' },
+  foodBadge:  { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, transform: [{ rotate: '-12deg' }] },
+  foodBadgeText:{ color: Colors.neutralWhite, fontSize: 12, fontWeight: '700' },
+  foodName:   { fontSize: 14, fontWeight: '700', color: Colors.neutralBlack, paddingTop: 8, paddingBottom: 2, lineHeight: 20, letterSpacing: 0.1 },
+  foodDesc:   { fontSize: 11, color: '#83859C', lineHeight: 16, letterSpacing: 0.2 },
+  // Web: <div className="flex justify-between items-center pt-2">
+  foodFooter: { flexDirection: 'row', flexWrap:'wrap', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8 },
+  foodPrice:  { fontSize: 13, fontWeight: '700', color: Colors.neutralBlack, lineHeight: 16, letterSpacing: 0.1 },
+  // Web: bg-[#EDEEF2] rounded-[6px] p-0.5
+  qtyStepper: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.neutralGrayLightest, borderRadius: 6, paddingHorizontal: 2, paddingVertical: 2 },
+  qtyStepBtn: { paddingHorizontal: 4, paddingVertical: 2 },
+  qtyStepText:{ paddingHorizontal: 6, fontSize: 12, fontWeight: '700', color: Colors.neutralBlack },
+  // Web's plus icon button (web has a custom SVG; we use the lucide Plus)
+  foodPlusBtn:{ padding: 4 },
   // Weekly plan
   dayTab:      { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: Colors.neutralGrayLight, backgroundColor: Colors.neutralWhite, position: 'relative' },
   dayTabActive:{ backgroundColor: Colors.primaryLight, borderColor: Colors.primary },
@@ -1146,4 +2073,527 @@ const s = StyleSheet.create({
   checkCircle:{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
   contBtn:    { backgroundColor: Colors.primary, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8, alignItems: 'center' },
   contBtnText:{ color: Colors.neutralWhite, fontSize: 14, fontWeight: '700' },
+});
+
+// ── Time slot sidebar styles (mirror of the Vending Locator sidebar) ──────────
+const ts = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'flex-end',
+  },
+  panelWrap: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: Math.min(W, 522),
+  },
+  panel: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: Colors.neutralWhite,
+    flexDirection: 'column',
+    shadowColor: '#000',
+    shadowOffset: { width: -4, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  // Web mobile: py-6 px-[15px]
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  headerTitle: {
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  closeBtn: {
+    padding: 8,
+    borderRadius: 999,
+    backgroundColor: '#F3F4F6',
+  },
+  // Slot card — web: my-3 py-[10px] px-4 rounded-[8px]
+  // Active: bg-[#EAF5FF] border-[#054A86]; Inactive: border-[#EDEEF2]
+  slot: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.neutralGrayLightest,
+    backgroundColor: Colors.neutralWhite,
+    marginBottom: 12,
+  },
+  slotActive: {
+    backgroundColor: Colors.primaryLight,
+    borderColor: Colors.primary,
+  },
+  slotText: {
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: '700',
+    color: Colors.neutralBlack,
+  },
+  slotTextActive: {
+    color: Colors.primary,
+  },
+  // Sticky footer — Confirm + Close
+  footer: {
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: Colors.neutralWhite,
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  btnPrimary: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnPrimaryText: {
+    color: Colors.neutralWhite,
+    fontWeight: '500',
+    fontSize: 15,
+  },
+  btnDisabled: {
+    backgroundColor: '#D1D5DB',
+  },
+  btnOutline: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnOutlineText: {
+    color: Colors.primary,
+    fontWeight: '500',
+    fontSize: 15,
+  },
+});
+
+// ── Weekly plan picker styles (port of web PlanWeekly mobile UI) ──────────────
+const wp = StyleSheet.create({
+  // h2 text-[16px] leading-[24px] font-[700] tracking-[0.1px]
+  title: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: Colors.neutralBlack, marginBottom: 12 },
+
+  // FEATURES row — two pills, half-width each
+  featureRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  featureBtn: {
+    flex: 1,
+    minWidth: 0,                              // let flex shrink past content
+    height: 44,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: Colors.neutralGrayLight,    // #C7C8D2
+    backgroundColor: Colors.neutralWhite,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureBtnActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,    // #EAF5FF
+  },
+  featureBtnText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    color: Colors.neutralBlack,
+    textAlign: 'center',
+  },
+  featureBtnTextActive: {
+    color: Colors.primary,
+  },
+
+  // Day dropdown + Saved Plans button row
+  dayRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4, marginBottom: 12 },
+  // h-[30px] border-2 border-[#054A86] text-[#054A86] bg-[#EAF5FF] rounded-[8px]
+  dayDropdown: {
+    flex: 1,
+    maxWidth: 200,
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dayDropdownText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  // h-[30px] gap-2 bg-white border border-[#054A86] rounded-[8px]
+  savedBtn: {
+    flex: 1,
+    maxWidth: 140,
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.neutralWhite,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  savedBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.neutralGrayDark,
+  },
+
+  // Status block — Selected for X / Total: N Meals
+  statusBlock: { gap: 6, marginBottom: 12 },
+  statusText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '400',
+    letterSpacing: 0.2,
+    color: Colors.neutralGrayDark,
+  },
+  statusTotalText: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: Colors.neutralGrayDark,
+  },
+  statusTotalBold: {
+    fontWeight: '700',
+  },
+
+  // Pickup time row
+  pickupRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
+  pickupLabel: { fontSize: 13, fontWeight: '600', color: Colors.neutralGrayDark },
+  pickupDropdown: {
+    flex: 1,
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pickupDropdownText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginRight: 6,
+  },
+
+  // Modal picker (day, time)
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  modalSheet: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: Colors.neutralWhite,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.primary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  modalItemActive: {
+    backgroundColor: Colors.primaryLight,
+  },
+  modalItemText: {
+    fontSize: 15,
+    color: Colors.neutralBlack,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  modalItemTextActive: {
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+
+  // Inline action buttons at the bottom of the picker (web mobile pattern):
+  //   Reset  — outline (visible only when current day has items)
+  //   Confirm and review — primary (disabled when totalMealsInPlan === 0)
+  actionsCol: {
+    flexDirection: 'column',
+    gap: 12,
+    marginTop: 24,
+  },
+  resetBtn: {
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.neutralGrayDark,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resetBtnText: {
+    color: Colors.neutralGrayDark,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  confirmBtn: {
+    paddingVertical: 14,
+    borderRadius: 8,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmBtnDisabled: {
+    backgroundColor: '#F7F7F9',
+  },
+  confirmBtnText: {
+    color: Colors.neutralWhite,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  confirmBtnTextDisabled: {
+    color: '#C7C8D2',
+  },
+});
+
+// ── Floating CTA bar (web "Sticky Footer Mobile") ─────────────────────────────
+const fab = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    zIndex: 40,
+  },
+  // Web: bg-white p-4 rounded-[20px] border + shadow-[0_-10px_40px_rgba(0,0,0,0.15)]
+  bar: {
+    backgroundColor: Colors.neutralWhite,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    padding: 16,
+    gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingHorizontal: 4,
+  },
+  // Web: text-[11px] text-gray-400 font-bold uppercase tracking-wider
+  statusLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9CA3AF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  // Web: text-[18px] font-bold text-[#054A86]
+  totalText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  // Web: text-[#545563] text-[14px] font-bold underline decoration-2
+  resetText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.neutralGrayDark,
+    textDecorationLine: 'underline',
+  },
+  // Web active: bg-[#054A86] py-5 rounded-[12px] text-[16px] font-bold
+  confirmBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  confirmBtnText: {
+    color: Colors.neutralWhite,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  // Web disabled: bg-[#F7F7F9] text-[#C7C8D2]
+  confirmBtnDisabled: {
+    backgroundColor: '#F7F7F9',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  confirmBtnTextDisabled: {
+    color: '#C7C8D2',
+  },
+});
+
+// ── Item-detail sidebar styles — port of web Menu.tsx item sheet ──────────────
+const id = StyleSheet.create({
+  // Header — flex items-center justify-between pb-[40px]
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    gap: 12,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 24,                    // web text-[28px], slimmed for phones
+    lineHeight: 32,                  // web leading-[36px]
+    fontWeight: '700',
+    color: Colors.neutralBlack,
+  },
+  closeBtn: {
+    padding: 8,
+    borderRadius: 999,
+    backgroundColor: '#F3F4F6',
+  },
+  // Image — h-60 (240px) on web mobile, rounded-[16px]
+  image: {
+    width: '100%',
+    height: 240,
+    borderRadius: 16,
+    marginTop: 16,
+    backgroundColor: Colors.neutralGrayLightest,
+  },
+  // Tap-to-preview hint pill anchored to the bottom-right of the detail
+  // image. Mirrors the web hover overlay "Full preview" badge.
+  previewHint: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  previewHintText: {
+    color: Colors.neutralWhite,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  body: {
+    paddingTop: 20,
+    paddingBottom: 12,
+  },
+  description: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#4B5563',                // web text-gray-600
+    marginBottom: 16,
+  },
+  // Price — text-[24px] leading-[32px] font-[700]
+  price: {
+    fontSize: 24,
+    lineHeight: 32,
+    fontWeight: '700',
+    color: Colors.neutralBlack,
+    letterSpacing: 0.1,
+    marginBottom: 4,
+  },
+  offerBlock: {
+    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    backgroundColor: '#FFF7ED',
+    borderRadius: 12,
+  },
+  offerText: {
+    fontSize: 14,
+    color: Colors.neutralBlack,
+  },
+  termsLink: {
+    marginTop: 8,
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#056AC1',
+    textDecorationLine: 'underline',
+  },
+  // Footer — flex gap-3, Close outline + + Add primary
+  footer: {
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: Colors.neutralWhite,
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  btnOutline: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnOutlineText: {
+    color: Colors.primary,
+    fontWeight: '500',
+    fontSize: 15,
+  },
+  btnPrimary: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnPrimaryText: {
+    color: Colors.neutralWhite,
+    fontWeight: '500',
+    fontSize: 15,
+  },
 });

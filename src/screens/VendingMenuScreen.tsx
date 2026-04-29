@@ -40,6 +40,7 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   Alert,
   Modal,
   Dimensions,
@@ -50,7 +51,7 @@ import {
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { X } from 'lucide-react-native';
+import { X, ChevronDown, RefreshCw } from 'lucide-react-native';
 import { MotiView } from 'moti';
 import { useSelector } from 'react-redux';
 import { Colors } from '@/utils/colors';
@@ -60,6 +61,7 @@ import MobileFooterNav from '@/components/layout/MobileFooterNav';
 import BreadCrumb from '@/components/ui/BreadCrumb';
 import Shimmer from '@/components/ui/Shimmer';
 import AuthPromptModal from '@/components/common/AuthPromptModal';
+import ImageLightbox from '@/components/common/ImageLightbox';
 import {
   getAuthToken,
   getSelectedLocation,
@@ -152,12 +154,18 @@ const ItemDetailSheet = ({
   item,
   onClose,
   onOrder,
+  onImagePress,
 }: {
   item: any;
   onClose: () => void;
   onOrder: () => void;
+  // Tapping the detail-image opens a full-screen lightbox in the parent.
+  onImagePress: (uri: string) => void;
 }) => {
   if (!item) return null;
+  // Web parity (PlanWeekly.tsx / Menu.tsx): the *details panel* uses
+  // `image2_url` (mapped to `imgSrc2`) and falls back to the card image.
+  const detailUri = item.image2_url || item.image_url;
   return (
     <Modal
       visible={!!item}
@@ -184,12 +192,20 @@ const ItemDetailSheet = ({
               </TouchableOpacity>
             </View>
 
-            {/* Image h-[343px] */}
-            <Image
-              source={{ uri: item.image_url }}
-              style={sheetStyles.image}
-              contentFit="cover"
-            />
+            {/* Detail image (image2_url) — tap to open full preview.
+                Web equivalent: <button onClick={() => setLightboxOpen(true)}> */}
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => detailUri && onImagePress(detailUri)}>
+              <Image
+                source={{ uri: detailUri }}
+                style={sheetStyles.image}
+                contentFit="cover"
+              />
+              <View style={sheetStyles.previewHint}>
+                <Text style={sheetStyles.previewHintText}>Tap to preview</Text>
+              </View>
+            </TouchableOpacity>
 
             {/* Details */}
             <View style={sheetStyles.details}>
@@ -232,35 +248,45 @@ export default function VendingMenuScreen() {
   const [tab,           setTab]           = useState(0);
   const [weeklyMenu,    setWeeklyMenu]    = useState<any>(null);
   const [loading,       setLoading]       = useState(true);
+  const [loadError,     setLoadError]     = useState<string | null>(null);
   const [machineGoods,  setMachineGoods]  = useState<any[] | null>(null);
   const [machineShelves,setMachineShelves]= useState<any[] | null>(null);
   const [selectedItem,  setSelectedItem]  = useState<any>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [dayPickerOpen, setDayPickerOpen] = useState(false);
+  // URI of the image being shown full-screen, or null when the lightbox is
+  // closed. Mirrors web's `lightboxOpen` boolean + `selectedItem.imgSrc2`.
+  const [lightboxUri, setLightboxUri]     = useState<string | null>(null);
 
-  // Fetch weekly menu — exact from web
-  useEffect(() => {
-    const fetchWeeklyMenu = async () => {
-      setLoading(true);
-      try {
-        const authToken = await getAuthToken();
-        const headers: any = {};
-        if (authToken) headers['Authorization'] = `Token ${authToken}`;
-        const res = await fetch(`${BASE_URL}/api/vending/menu/plan/WEEKLY/`, {
-          method: 'GET',
-          headers,
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setWeeklyMenu(data.week_menu);
-        }
-      } catch (err) {
-        console.error('Error fetching weekly menu:', err);
-      } finally {
-        setLoading(false);
+  // Fetch weekly menu — extracted into callable fn so retry can re-invoke it
+  const fetchWeeklyMenu = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const authToken = await getAuthToken();
+      const headers: any = {};
+      if (authToken) headers['Authorization'] = `Token ${authToken}`;
+      const res = await fetch(`${BASE_URL}/api/vending/menu/plan/WEEKLY/`, {
+        method: 'GET',
+        headers,
+      });
+      if (!res.ok) {
+        throw new Error(`Server responded ${res.status}`);
       }
-    };
-    fetchWeeklyMenu();
+      const data = await res.json();
+      if (!data?.week_menu) {
+        throw new Error('Menu data missing from response');
+      }
+      setWeeklyMenu(data.week_menu);
+    } catch (err: any) {
+      console.error('Error fetching weekly menu:', err);
+      setLoadError(err?.message || 'Failed to load menu');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { fetchWeeklyMenu(); }, [fetchWeeklyMenu]);
 
   // Fetch machine goods — exact from web
   useEffect(() => {
@@ -467,101 +493,149 @@ export default function VendingMenuScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <Header />
+      <Header variant="vending" />
 
-      {/* Breadcrumb + title */}
-      <View style={styles.titleArea}>
-        <BreadCrumb />
-        <Text style={styles.pageTitle}>Vending Menu</Text>
-      </View>
-
-      {/* Day tabs (sticky equivalent — inside ScrollView header) */}
-      <View style={styles.tabsHeader}>
-        {/* Count line */}
-        <Text style={styles.countText}>
-          Browse our daily menu of {totalAvailableCount} chef-prepared meals
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsScroll}>
-          {DAYS.map((day, index) => (
-            <TouchableOpacity
-              key={day}
-              style={[
-                styles.tab,
-                tab === index ? styles.tabActive : styles.tabInactive,
-              ]}
-              onPress={() => setTab(index)}>
-              <Text
-                style={[
-                  styles.tabText,
-                  tab === index && styles.tabTextActive,
-                ]}>
-                {day}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Content */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {loading ? (
-          <Shimmer />
-        ) : shelfData.length > 0 ? (
-          // Shelf/spot layout — exact from web
-          <View style={styles.shelvesWrap}>
-            {shelfData.map((shelf: any) => (
-              <View key={shelf.shelfIndex} style={styles.shelfSection}>
-                <View style={styles.shelfHeader}>
-                  <View style={styles.shelfAccent} />
-                  <Text style={styles.shelfName}>{shelf.shelfName}</Text>
-                </View>
-                <View style={styles.itemsWrap}>
-                  {shelf.spots.map((spot: any, si: number) => {
-                    const data = spot.enrichedItem;
-                    return (
-                      <View key={si} style={styles.spotWrap}>
-                        {/* Spot label */}
-                        <View style={styles.spotLabel}>
-                          <Text style={styles.spotLabelText}>
-                            {spot.arrivalName}
-                          </Text>
+
+        {/* Breadcrumb + title — matches web: BreadCrumb + h2 "Vending Menu" */}
+        <View style={styles.titleArea}>
+          <BreadCrumb />
+          <Text style={styles.pageTitle}>Vending Menu</Text>
+        </View>
+
+        {/* Sub-header — web mobile layout: [Day Select dropdown] [Start Your Order]
+            Web shows tab pills only on md+ (`hidden md:flex`), and the count
+            text only on md+ (`md:flex hidden`), so neither belongs on mobile. */}
+        <View style={styles.subHeader}>
+          <TouchableOpacity
+            style={styles.dayDropdown}
+            onPress={() => setDayPickerOpen(true)}
+            activeOpacity={0.85}>
+            <Text style={styles.dayDropdownText}>{DAYS[tab]}</Text>
+            <ChevronDown size={16} color={Colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.startBtn}
+            onPress={() => navigation.navigate('OrderNow')}
+            activeOpacity={0.85}>
+            <Text style={styles.startBtnText}>Start Your Order</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Items / shelves / loading / error */}
+        <View style={styles.itemsArea}>
+          {loading ? (
+            <Shimmer />
+          ) : loadError ? (
+            <View style={styles.errorState}>
+              <Text style={styles.errorTitle}>Couldn't load the menu</Text>
+              <Text style={styles.errorMsg}>{loadError}</Text>
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={fetchWeeklyMenu}>
+                <RefreshCw size={14} color={Colors.neutralWhite} />
+                <Text style={styles.retryBtnText}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : shelfData.length > 0 ? (
+            <View style={styles.shelvesWrap}>
+              {shelfData.map((shelf: any) => (
+                <View key={shelf.shelfIndex} style={styles.shelfSection}>
+                  <View style={styles.shelfHeader}>
+                    <View style={styles.shelfAccent} />
+                    <Text style={styles.shelfName}>{shelf.shelfName}</Text>
+                  </View>
+                  <View style={styles.itemsWrap}>
+                    {shelf.spots.map((spot: any, si: number) => {
+                      const data = spot.enrichedItem;
+                      return (
+                        <View key={si} style={styles.spotWrap}>
+                          <View style={styles.spotLabel}>
+                            <Text style={styles.spotLabelText}>
+                              {spot.arrivalName}
+                            </Text>
+                          </View>
+                          <MenuItemCard
+                            data={{ ...data, imgAlt: data.name }}
+                            quantity={spot.presentNumber}
+                            onClick={() => setSelectedItem({ ...data })}
+                          />
                         </View>
-                        <MenuItemCard
-                          data={{ ...data, imgAlt: data.name }}
-                          quantity={spot.presentNumber}
-                          onClick={() => setSelectedItem({ ...data })}
-                        />
-                      </View>
-                    );
-                  })}
+                      );
+                    })}
+                  </View>
                 </View>
-              </View>
-            ))}
-          </View>
-        ) : currentDayItems.length > 0 ? (
-          <View style={styles.itemsWrap}>
-            {currentDayItems.map((data: any, index: number) => (
-              <MenuItemCard
-                key={index}
-                data={{ ...data, imgAlt: data.name }}
-                onClick={() => setSelectedItem({ ...data })}
-              />
-            ))}
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>
-              No items available for {DAYS[tab]}.
-            </Text>
-          </View>
-        )}
+              ))}
+            </View>
+          ) : currentDayItems.length > 0 ? (
+            <View style={styles.itemsWrap}>
+              {currentDayItems.map((data: any, index: number) => (
+                <MenuItemCard
+                  key={index}
+                  data={{ ...data, imgAlt: data.name }}
+                  onClick={() => setSelectedItem({ ...data })}
+                />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>
+                No items available for {DAYS[tab]}.
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Web-style footer scrolls in at the very bottom; the floating
+            MobileFooterNav stays fixed below the ScrollView. */}
+        <Footer />
+
+        {/* Bottom spacer so the last items aren't hidden under MobileFooterNav */}
+        <View style={{ height: 16 }} />
       </ScrollView>
+
+      {/* Day picker — replaces the web mobile <select> */}
+      <Modal
+        visible={dayPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDayPickerOpen(false)}>
+        <TouchableWithoutFeedback onPress={() => setDayPickerOpen(false)}>
+          <View style={styles.dayPickerBackdrop}>
+            <TouchableWithoutFeedback>
+              <View style={styles.dayPickerSheet}>
+                <Text style={styles.dayPickerTitle}>Choose a day</Text>
+                {DAYS.map((day, index) => {
+                  const isActive = tab === index;
+                  return (
+                    <TouchableOpacity
+                      key={day}
+                      style={[
+                        styles.dayPickerItem,
+                        isActive && styles.dayPickerItemActive,
+                      ]}
+                      onPress={() => {
+                        setTab(index);
+                        setDayPickerOpen(false);
+                      }}>
+                      <Text
+                        style={[
+                          styles.dayPickerItemText,
+                          isActive && styles.dayPickerItemTextActive,
+                        ]}>
+                        {day}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       {/* Item detail slide-in */}
       <ItemDetailSheet
@@ -571,15 +645,24 @@ export default function VendingMenuScreen() {
           startOrder();
           setSelectedItem(null);
         }}
+        onImagePress={(uri) => setLightboxUri(uri)}
+      />
+
+      {/* Full-screen image preview (lightbox) — opens above the detail sheet,
+          same way `z-[100]` sits above `z-50` on the web. */}
+      <ImageLightbox
+        visible={!!lightboxUri}
+        uri={lightboxUri}
+        onClose={() => setLightboxUri(null)}
       />
 
       <MobileFooterNav />
-      <Footer />
 
       <AuthPromptModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         message="Please log in to add items to your cart. Don't have an account? Sign up for free!"
+        returnTo={{ name: 'VendingMenu' }}
       />
     </View>
   );
@@ -593,8 +676,8 @@ const styles = StyleSheet.create({
   titleArea: {
     backgroundColor: Colors.neutralWhite,
     paddingHorizontal: 16,
-    paddingBottom: 16,
     paddingTop: 4,
+    paddingBottom: 12,
   },
   pageTitle: {
     fontSize: 28,                  // text-[28px]
@@ -603,58 +686,59 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
     lineHeight: 36,
   },
-  tabsHeader: {
+  // Web mobile: <select> + "Start Your Order" button in a row, half-width each
+  subHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
     backgroundColor: Colors.neutralWhite,
-    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.neutralGrayLightest,
-    // sticky top-[64px] → managed by layout
   },
-  countText: {
-    fontSize: 14,
-    color: Colors.neutralBlack,
-    fontWeight: '400',
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
-  tabsScroll: {
-    paddingHorizontal: 16,
-    gap: 12,
-    paddingTop: 8,
-  },
-  tab: {
-    height: 44,                    // h-[56px] on desktop → 44 mobile
-    paddingHorizontal: 16,
-    borderRadius: 16,              // rounded-[16px]
+  // .w-1/2 h-[40px] border border-neutral-gray-light rounded-[8px]
+  dayDropdown: {
+    flex: 1,
+    height: 40,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 90,
-  },
-  tabActive: {
-    backgroundColor: Colors.primaryLight, // bg-[#EAF5FF]
-    borderWidth: 2,
-    borderColor: Colors.primary,          // border-[#054A86]
-  },
-  tabInactive: {
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
     backgroundColor: Colors.neutralWhite,
     borderWidth: 1,
-    borderColor: Colors.neutralGrayLight, // border-[#C7C8D2]
+    borderColor: Colors.neutralGrayLight,
+    borderRadius: 8,
   },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: Colors.neutralBlack,
+  dayDropdownText: {
+    fontSize: 13,
+    color: Colors.neutralGrayDark,
+    fontWeight: '500',
   },
-  tabTextActive: {
-    fontWeight: '600',
-    color: Colors.primary,
+  // .bg-[#054A86] w-1/2 — Start Your Order button
+  startBtn: {
+    flex: 1,
+    height: 40,
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  startBtnText: {
+    color: Colors.neutralWhite,
+    fontWeight: '700',
+    fontSize: 13,
   },
   scroll: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   scrollContent: {
+    paddingBottom: 24,
+  },
+  itemsArea: {
     padding: 16,
-    paddingBottom: 0,
   },
   itemsWrap: {
     flexDirection: 'row',
@@ -790,6 +874,86 @@ const styles = StyleSheet.create({
     color: Colors.neutralGray,
     fontSize: 16,
   },
+  // Error state for menu fetch failures
+  errorState: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.neutralBlack,
+    marginBottom: 4,
+  },
+  errorMsg: {
+    fontSize: 13,
+    color: Colors.neutralGray,
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryBtnText: {
+    color: Colors.neutralWhite,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  // Day picker (replaces web mobile <select>)
+  dayPickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  dayPickerSheet: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: Colors.neutralWhite,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  dayPickerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.primary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  dayPickerItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  dayPickerItemActive: {
+    backgroundColor: Colors.primaryLight,
+  },
+  dayPickerItemText: {
+    fontSize: 15,
+    color: Colors.neutralBlack,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  dayPickerItemTextActive: {
+    color: Colors.primary,
+    fontWeight: '700',
+  },
 });
 
 const sheetStyles = StyleSheet.create({
@@ -834,6 +998,23 @@ const sheetStyles = StyleSheet.create({
   image: {
     width: '100%',
     height: 240,                   // h-[343px] → 240 mobile
+  },
+  // "Tap to preview" pill anchored to bottom-right of the detail image —
+  // visual hint that the image is tappable for full-preview.
+  previewHint: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  previewHintText: {
+    color: Colors.neutralWhite,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   details: {
     padding: 20,

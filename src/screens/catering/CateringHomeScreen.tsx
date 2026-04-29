@@ -3,8 +3,7 @@
  * Source: pages/catering/pages/Index.tsx → HeroSection + HowItWorks + PromoBanners + Newsletter
  */
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '@/utils/colors';
@@ -12,12 +11,18 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import MobileFooterNav from '@/components/layout/MobileFooterNav';
 import Newsletter from '@/components/ui/Newsletter';
+// All `.svg` files are imported as React components by metro
+// (react-native-svg-transformer moves .svg from assetExts to sourceExts).
+// Passing a component constructor to <Image source={...}> crashes with
+// "property is not configurable", so we render every SVG as a component.
+import HeaderBgSvg from '@/assets/images/header/header.svg';
 import HeaderCardIcon from '@/assets/images/header/headercardicon.svg';
 import CateringStyleIcon from '@/assets/images/header/catle.svg';
 import DeliverIcon from '@/assets/images/header/deleiver.svg';
 import CalendarIcon from '@/assets/images/header/calender.svg';
 import PromoburgerSvg from '@/assets/images/icons/promoburger.svg';
-import PromomobileSvg from '@/assets/images/icons/promomobile.svg';
+
+const { width: SCREEN_W } = Dimensions.get('window');
 
 const STEPS = [
   { Icon: CateringStyleIcon, title: 'Select Your Catering Style', description: "Choose from a variety of catering styles. Whether it's a corporate lunch or a private celebration, our fully customizable menu caters to all the staff events you host." },
@@ -27,7 +32,6 @@ const STEPS = [
 
 const PROMO_DATA = [
   { title: 'Top Deals', description: 'Eat well. Pay less. Now with tasty savings!', buttonText: 'Coming Soon', ImageComp: PromoburgerSvg, bgColor: '#EE3123' },
-  { title: 'Get the Dosta App', description: 'Manage your deliveries from anywhere, anytime.', buttonText: 'Download App', ImageComp: PromomobileSvg, bgColor: '#054A86' },
 ];
 
 export default function CateringHomeScreen() {
@@ -36,12 +40,19 @@ export default function CateringHomeScreen() {
 
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
-      <Header />
+      <Header variant="catering" />
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
 
         {/* ── HeroSection ────────────────────────────────────── */}
         <View style={s.heroSection}>
-          <Image source={require('@/assets/images/header/header.svg')} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+          {/* Background SVG rendered as a stretched component, not an Image */}
+          <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+            <HeaderBgSvg
+              width={SCREEN_W}
+              height="100%"
+              preserveAspectRatio="xMidYMid slice"
+            />
+          </View>
           <View style={s.heroOverlay} />
           <View style={s.heroCardWrap}>
             <View style={s.heroCard}>

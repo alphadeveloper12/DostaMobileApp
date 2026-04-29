@@ -21,7 +21,7 @@ const ShimmerBox = ({ style }: { style?: object }) => (
 export default function Shimmer() {
   return (
     <View style={styles.grid}>
-      {[1, 2, 3, 4, 5, 6].map((i) => (
+      {[1, 2, 3, 4].map((i) => (
         <View key={i} style={styles.card}>
           {/* Image area — h-[180px] matching MenuItemCard */}
           <ShimmerBox style={styles.imageArea} />
@@ -38,14 +38,15 @@ export default function Shimmer() {
 }
 
 const styles = StyleSheet.create({
+  // Vertical stack of full-width cards so the loading state spans the whole
+  // content area instead of the half-width grid the web variant uses.
   grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: 'column',
     gap: 16,
-    padding: 16,
+    paddingVertical: 8,
   },
   card: {
-    width: '47%',
+    width: '100%',
     backgroundColor: Colors.neutralWhite,
     borderRadius: 16,                // rounded-[16px]
     borderWidth: 1,

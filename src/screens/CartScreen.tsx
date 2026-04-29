@@ -61,6 +61,7 @@ import MobileFooterNav from '@/components/layout/MobileFooterNav';
 import BreadCrumb from '@/components/ui/BreadCrumb';
 import AuthPromptModal from '@/components/common/AuthPromptModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import OrderTimeRestrictionModal from '@/components/common/OrderTimeRestrictionModal';
 import { syncLocalCart } from '@/store/slices/cartSlice';
 import {
   getAuthToken,
@@ -389,6 +390,9 @@ export default function CartScreen() {
   const [showPaymentDialog, setShowPaymentDialog]  = useState(false);
   const [showClearDialog,   setShowClearDialog]    = useState(false);
   const [showAuthModal,     setShowAuthModal]      = useState(false);
+  // Mirrors web `showOrderTimeModal` — gates checkout for WEEKLY / MONTHLY /
+  // SWEETS carts to UAE 07:00–18:00 (see processCheckout in web CartPage).
+  const [showOrderTimeModal, setShowOrderTimeModal] = useState(false);
   const [stockAlerts,       setStockAlerts]        = useState<string[]>([]);
 
   const isPaymentReturn = useRef(
@@ -623,7 +627,14 @@ export default function CartScreen() {
           items:        apiItems,
         }, { headers: { Authorization: `Token ${token}` } });
       } catch {}
+    } else {
+      // Guest path — persist the updated quantity to AsyncStorage. Without
+      // this, closing the app or navigating away would lose the change since
+      // the reducer no longer writes to storage.
+      const existing = await getGuestCart();
+      await setGuestCart({ ...(existing || {}), items: updatedAllItems });
     }
+    dispatch(syncLocalCart(updatedAllItems));
   };
 
   const handleDeleteItem = async (id: number) => {
@@ -653,6 +664,16 @@ export default function CartScreen() {
           items:        apiItems,
         }, { headers: { Authorization: `Token ${token}` } });
       } catch {}
+    } else {
+      // Guest path — mirror the change into AsyncStorage so it survives a
+      // restart. If the user just deleted their last item, drop the whole
+      // guestCart entry instead of leaving an empty-items shell behind.
+      if (updatedAllItems.length === 0) {
+        await removeGuestCart();
+      } else {
+        const existing = await getGuestCart();
+        await setGuestCart({ ...(existing || {}), items: updatedAllItems });
+      }
     }
   };
 
@@ -941,6 +962,30 @@ export default function CartScreen() {
               onCheckout={async () => {
                 const token = await getAuthToken();
                 if (!token) { setShowAuthModal(true); return; }
+
+                // ── UAE Order Time Restriction ───────────────────────────
+                // Faithful port of web pages/CartPage.tsx processCheckout.
+                // WEEKLY / MONTHLY / SWEETS carts can only check out
+                // between 07:00 and 18:00 UAE time (UTC+4). Order Now and
+                // Smart Grab are unrestricted.
+                if (cartData) {
+                  const isTimedPlan =
+                    cartData.plan_subtype === 'WEEKLY' ||
+                    cartData.plan_subtype === 'MONTHLY' ||
+                    cartData.plan_type    === 'SWEETS';
+                  if (isTimedPlan) {
+                    const now = new Date();
+                    const uaeHour = new Date(
+                      now.getTime() +
+                        (now.getTimezoneOffset() + 4 * 60) * 60_000,
+                    ).getHours();
+                    if (uaeHour < 7 || uaeHour >= 18) {
+                      setShowOrderTimeModal(true);
+                      return;
+                    }
+                  }
+                }
+
                 setShowPaymentDialog(true);
               }}
               loading={isCheckingOut}
@@ -972,11 +1017,18 @@ export default function CartScreen() {
         onCancel={() => setShowClearDialog(false)}
       />
 
+      {/* Out-of-hours block for WEEKLY / MONTHLY / SWEETS carts */}
+      <OrderTimeRestrictionModal
+        visible={showOrderTimeModal}
+        onClose={() => setShowOrderTimeModal(false)}
+      />
+
       <MobileFooterNav />
       <AuthPromptModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         message="Please log in to proceed to checkout. Don't have an account? Sign up for free!"
+        returnTo={{ name: 'Cart' }}
       />
     </View>
   );

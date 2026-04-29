@@ -52,7 +52,7 @@ export default function RequestCustomQuoteScreen() {
     <KeyboardAvoidingView
       style={[s.screen, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Header />
+      <Header variant="catering" />
 
       {/* Title bar */}
       <View style={s.titleBar}>

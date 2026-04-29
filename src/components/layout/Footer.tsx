@@ -55,19 +55,6 @@ const footerSections = [
   },
 ];
 
-// App store badge URIs (same as web)
-const appBadges = [
-  {
-    src: 'https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg',
-    alt: 'Download on App Store',
-    link: '#',
-  },
-  {
-    src: 'https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg',
-    alt: 'Get it on Google Play',
-    link: 'https://play.google.com/store/apps/details?id=com.dosta.app',
-  },
-];
 
 // Social links (same as web)
 const socialLinks = [
@@ -100,26 +87,6 @@ export default function Footer() {
           ))}
         </View>
 
-        {/* App download section */}
-        <View style={styles.appSection}>
-          <Text style={styles.sectionTitle}>Download our app</Text>
-          <Text style={styles.appSubtitle}>
-            Manage your deliveries from anywhere, anytime.
-          </Text>
-          <View style={styles.badgeRow}>
-            {appBadges.map((badge) => (
-              <TouchableOpacity
-                key={badge.alt}
-                onPress={() => badge.link !== '#' && Linking.openURL(badge.link)}>
-                <Image
-                  source={{ uri: badge.src }}
-                  style={styles.appBadge}
-                  contentFit="contain"
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
       </View>
 
       {/* Bottom bar: social + copyright */}
@@ -189,23 +156,6 @@ const styles = StyleSheet.create({
   link: {
     color: Colors.neutralGray,             // text-gray-400
     fontSize: 14,                          // text-sm
-  },
-  appSection: {
-    marginBottom: 8,
-  },
-  appSubtitle: {
-    color: Colors.neutralGray,
-    fontSize: 14,
-    marginBottom: 16,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  appBadge: {
-    height: 40,                            // h-10
-    width: 130,
   },
   bottom: {
     borderTopWidth: 1,

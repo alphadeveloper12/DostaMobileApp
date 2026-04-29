@@ -38,8 +38,8 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { Eye, EyeOff, ChevronLeft } from 'lucide-react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { Eye, EyeOff, ChevronLeft, Mail } from 'lucide-react-native';
 import axios from 'axios';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
@@ -218,6 +218,21 @@ const ForgotPasswordForm = ({ onBack }: { onBack: () => void }) => {
 };
 
 // ── Email Sign In Form (translation of SigninForm.tsx) ────────────────────────
+// Resolve the post-login destination. Auth screens are launched with an
+// optional `returnTo` route param so the user is bounced back to the screen
+// they came from (e.g. Cart) instead of always landing on Home.
+const navigateAfterAuth = (navigation: any, route: any) => {
+  const returnTo = route?.params?.returnTo;
+  if (returnTo?.name) {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: returnTo.name, params: returnTo.params }],
+    });
+  } else {
+    navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+  }
+};
+
 const EmailSignInForm = ({
   onBack,
   onForgotPassword,
@@ -226,6 +241,7 @@ const EmailSignInForm = ({
   onForgotPassword: () => void;
 }) => {
   const navigation = useNavigation<any>();
+  const route      = useRoute<any>();
   const dispatch   = useDispatch();
 
   const [email, setEmail]             = useState('');
@@ -259,7 +275,7 @@ const EmailSignInForm = ({
         }
         // @ts-ignore
         dispatch(fetchCartData());
-        navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+        navigateAfterAuth(navigation, route);
       }
     } catch (err: any) {
       setError(
@@ -374,14 +390,20 @@ const EmailSignInForm = ({
 };
 
 // ── Auth Selection Panel (translation of AuthPanel in MainSection.tsx) ─────────
+// Web mobile flow: user picks a method (email/google) → tile gets a blue border
+// → "Continue" button (disabled until a method is picked) routes accordingly.
+type Method = 'email' | 'google' | null;
+
 const AuthSelectionPanel = ({
   onEmailPress,
 }: {
   onEmailPress: () => void;
 }) => {
   const navigation = useNavigation<any>();
+  const route      = useRoute<any>();
   const dispatch   = useDispatch();
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [selectedMethod, setSelectedMethod] = useState<Method>(null);
 
   // Google OAuth via expo-auth-session (mirrors web useGoogleLogin)
   const GOOGLE_CLIENT_ID = '760692328304-hiu23pr6oq24ptkq3iiqqcm8k8rn639i.apps.googleusercontent.com';
@@ -416,7 +438,7 @@ const AuthSelectionPanel = ({
           }
           // @ts-ignore
           dispatch(fetchCartData());
-          navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+          navigateAfterAuth(navigation, route);
         } catch (err: any) {
           const errData = err.response?.data;
           if (errData?.non_field_errors?.includes('User is already registered with this e-mail address.')) {
@@ -459,22 +481,30 @@ const AuthSelectionPanel = ({
         .
       </Text>
 
-      {/* Sign in with email button — whitebg variant from web */}
+      {/* Sign in with email button — whitebg variant from web. Selected
+          method gets a blue border (web's "border border-blue-400"). */}
       <View style={[styles.methodsCol, { marginTop: 32 }]}>
         <TouchableOpacity
-          style={styles.methodBtn}
-          onPress={onEmailPress}>
-          {/* Email icon — SVG equivalent */}
+          style={[
+            styles.methodBtn,
+            selectedMethod === 'email' && styles.methodBtnSelected,
+          ]}
+          onPress={() => setSelectedMethod('email')}
+          activeOpacity={0.85}>
           <View style={styles.methodIcon}>
-            <Text style={{ fontSize: 18 }}>✉️</Text>
+            <Mail size={20} color={Colors.neutralBlack} />
           </View>
           <Text style={styles.methodText}>Sign in with email</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.methodBtn}
-          onPress={() => promptAsync()}
-          disabled={!request || googleLoading}>
+          style={[
+            styles.methodBtn,
+            selectedMethod === 'google' && styles.methodBtnSelected,
+          ]}
+          onPress={() => setSelectedMethod('google')}
+          disabled={googleLoading}
+          activeOpacity={0.85}>
           {googleLoading ? (
             <ActivityIndicator size="small" color={Colors.neutralBlack} />
           ) : (
@@ -484,11 +514,20 @@ const AuthSelectionPanel = ({
         </TouchableOpacity>
       </View>
 
-      {/* Continue button — bg-[#054A86] */}
+      {/* Continue button — disabled until a method is picked (web mobile rule) */}
       <TouchableOpacity
-        style={[styles.primaryBtn, { marginTop: 20 }]}
-        onPress={onEmailPress}>
-        <Text style={styles.primaryBtnText}>Continue with Email</Text>
+        style={[
+          styles.primaryBtn,
+          { marginTop: 20 },
+          !selectedMethod && styles.primaryBtnDisabled,
+        ]}
+        onPress={() => {
+          if (selectedMethod === 'email') onEmailPress();
+          else if (selectedMethod === 'google' && request) promptAsync();
+        }}
+        disabled={!selectedMethod || (selectedMethod === 'google' && !request)}
+        activeOpacity={0.85}>
+        <Text style={styles.primaryBtnText}>Continue</Text>
       </TouchableOpacity>
 
       {/* Don't have account */}
@@ -514,15 +553,13 @@ export default function SignInScreen() {
       style={{ flex: 1, backgroundColor: Colors.neutralWhite }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
-        style={{ flex: 1 }}
+        style={{ flex: 1, paddingTop: insets.top }}
         contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
 
-        {/* Image slider — right panel on web (55% width), top on mobile */}
-        <AuthSlider />
-
-        {/* Auth panel — left panel on web (45%), below slider on mobile */}
+        {/* Web mobile hides the right-side Slider entirely — only the auth
+            panel is shown on phones. We follow the same rule. */}
         <AnimateOnScroll direction="up" duration={400}>
           {view === 'selection' && (
             <AuthSelectionPanel onEmailPress={() => setView('emailForm')} />
@@ -615,11 +652,11 @@ const styles = StyleSheet.create({
     color: Colors.neutralGrayDark,
   },
 
-  // "Sign in" heading — text-[60px] → scaled to 48px on mobile
+  // "Sign in" heading — web text-[60px] leading-[82px]. 56/64 on phones.
   signInHeading: {
-    fontSize: 48,                   // text-[60px] in web, 48 on small screens
+    fontSize: 56,
     fontWeight: '700',
-    lineHeight: 56,                 // leading-[82px] in web
+    lineHeight: 64,
     color: Colors.neutralBlack,     // text-[#2B2B43]
     paddingTop: 68,                 // pt-[68px]
   },
@@ -657,6 +694,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: Colors.neutralWhite,
   },
+  // Web mobile: when a method is picked the tile gets `border-blue-400`
+  methodBtnSelected: {
+    borderColor: '#60A5FA',
+    borderWidth: 1,
+  },
   methodIcon: {
     width: 24,
     height: 24,
@@ -686,6 +728,11 @@ const styles = StyleSheet.create({
     color: Colors.neutralWhite,
     fontWeight: '700',
     fontSize: 14,
+  },
+  primaryBtnDisabled: {
+    backgroundColor: '#9CA3AF',
+    shadowOpacity: 0,
+    elevation: 0,
   },
 
   // Forgot password link

@@ -6,7 +6,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import axios from 'axios';
 import Constants from 'expo-constants';
-import { getAuthToken, getGuestCart, setGuestCart, removeGuestCart } from '@/utils/storage';
+import { getAuthToken, getGuestCart, removeGuestCart } from '@/utils/storage';
 
 const BASE_URL: string =
   (Constants.expoConfig?.extra?.apiUrl as string) || (Constants.manifest as any)?.extra?.apiUrl || 'https://dosta.cloud';
@@ -59,20 +59,17 @@ const cartSlice = createSlice({
       removeGuestCart();
     },
     syncLocalCart: (state, action: PayloadAction<any[]>) => {
+      // PURE Redux update only. AsyncStorage persistence is the caller's job
+      // — having the reducer fire its own write created a race with explicit
+      // `setGuestCart(payload)` calls (the empty-items write could land last
+      // and silently wipe the cart). The Immer draft is also invalid by the
+      // time the `.then()` callback fires, which made the side effect even
+      // more fragile.
       state.items = action.payload;
       state.totalQuantity = action.payload.reduce(
         (acc: number, item: any) => acc + (item.quantity || 1),
         0,
       );
-      // Persist guest cart to AsyncStorage (async, fire-and-forget)
-      getAuthToken().then((token) => {
-        if (!token) {
-          getGuestCart().then((existing) => {
-            const updated = { ...(existing || {}), items: state.items };
-            setGuestCart(updated);
-          });
-        }
-      });
     },
   },
   extraReducers: (builder) => {

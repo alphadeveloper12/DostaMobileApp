@@ -43,7 +43,7 @@ export default function CateringConfirmationScreen() {
 
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
-      <Header />
+      <Header variant="catering" />
 
       {/* bg-neutral-white title bar */}
       <View style={s.titleBar}>

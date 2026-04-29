@@ -35,23 +35,28 @@ interface Props {
   isOpen:    boolean;
   onClose:   () => void;
   message?:  string;
+  // Where to send the user after a successful sign-in / sign-up. Passed
+  // through to SignInScreen/SignUpScreen as a nav param. If unset, the auth
+  // screens fall back to resetting the stack to Home.
+  returnTo?: { name: string; params?: Record<string, any> };
 }
 
 export default function AuthPromptModal({
   isOpen,
   onClose,
   message = 'Please log in to your account to add items to your cart.',
+  returnTo,
 }: Props) {
   const navigation = useNavigation<any>();
 
   const handleSignIn = () => {
     onClose();
-    navigation.navigate('SignIn');
+    navigation.navigate('SignIn', returnTo ? { returnTo } : undefined);
   };
 
   const handleSignUp = () => {
     onClose();
-    navigation.navigate('SignUp');
+    navigation.navigate('SignUp', returnTo ? { returnTo } : undefined);
   };
 
   return (

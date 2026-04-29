@@ -67,7 +67,11 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import MobileFooterNav from '@/components/layout/MobileFooterNav';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+// Hero sized to fit content snugly: image (180) + margin (14) + title (~3 lines)
+// + paragraph (~5 lines) + CTA + paddings ≈ 510px. 540 gives a small buffer
+// without leaving dead space below the button.
+const HERO_HEIGHT = Math.min(540, Math.round(SCREEN_H * 0.7));
 
 // ── Slide data — exact from web HeroSection.tsx ──────────────────────────────
 const SLIDER_DATA = [
@@ -94,14 +98,6 @@ const SLIDER_DATA = [
     image: require('@/assets/images/header/Slide3.png'),
     buttonText: 'Request a Quote',
     buttonLink: 'RequestCustomQuote',
-  },
-  {
-    title: 'Smart Food Ordering Starts Here',
-    description:
-      'Download the DOSTA app and enjoy 15% off your first order with FIRST15.',
-    image: require('@/assets/images/header/Slide4.png'),
-    buttonText: 'Download App',
-    buttonLink: 'Home',
   },
 ];
 
@@ -146,14 +142,6 @@ const PROMO_DATA = [
     ImageComponent:PromoburgerSvg,
     bgColor:       '#EE3123',
     link:          '#',
-  },
-  {
-    title:         'Get the Dosta App',
-    description:   'Manage your deliveries from anywhere, anytime.',
-    buttonText:    'Download App',
-    ImageComponent:PromomobileSvg,
-    bgColor:       '#054A86',
-    link:          'https://play.google.com/store/apps/details?id=com.dosta.app',
   },
 ];
 
@@ -234,9 +222,9 @@ const HeroSection = () => {
     <View style={styles.hero}>
       <Carousel
         width={SCREEN_W}
-        height={480}
+        height={HERO_HEIGHT}
         autoPlay
-        autoPlayInterval={3000}
+        autoPlayInterval={3500}
         data={SLIDER_DATA}
         scrollAnimationDuration={1000}
         onSnapToItem={setActiveIndex}
@@ -258,58 +246,83 @@ const HeroSection = () => {
 };
 
 // ── ShowCase Card ─────────────────────────────────────────────────────────────
-const ShowCaseCard = ({ step }: { step: (typeof SHOWCASE_STEPS)[0] }) => {
+// Web mobile: cards stack vertically (1 column), each full-width with the
+// same image-top + tag badge + title + description + outline button layout.
+// Animated fade-in from y:50 with a per-index delay (web's framer-motion
+// stagger). Tap anywhere on the card OR the explicit button navigates.
+const ShowCaseCard = ({
+  step,
+  index,
+}: {
+  step: (typeof SHOWCASE_STEPS)[0];
+  index: number;
+}) => {
   const navigation = useNavigation<any>();
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => navigation.navigate(step.link)}
-      activeOpacity={0.9}>
-      {/* Image top — h-[224px] */}
-      <View style={styles.cardImageWrap}>
-        {step.IconComponent ? (
-          <step.IconComponent width="100%" height="100%" />
-        ) : (
-          <Image
-            source={step.imgSource}
-            style={styles.cardImage}
-            contentFit="cover"
-          />
-        )}
-        {/* Tag badge — bg-[#A7CF38] absolute bottom-[-14px] */}
-        <View style={styles.tagBadge}>
-          <Text style={styles.tagText}>{step.tag}</Text>
+    <MotiView
+      from={{ opacity: 0, translateY: 50 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{
+        type: 'spring',
+        stiffness: 70,
+        damping: 20,
+        delay: index * 150,
+      }}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => navigation.navigate(step.link)}
+        activeOpacity={0.9}>
+        {/* Image top — h-[224px], clipped by the card's borderRadius */}
+        <View style={styles.cardImageWrap}>
+          {step.IconComponent ? (
+            // `xMidYMid slice` is the SVG equivalent of CSS object-fit:cover —
+            // fills the box and crops; without it the SVG was being centered
+            // and letterboxed, leaving white above/below the image.
+            <step.IconComponent
+              width="100%"
+              height="100%"
+              preserveAspectRatio="xMidYMid slice"
+            />
+          ) : (
+            <Image
+              source={step.imgSource}
+              style={styles.cardImage}
+              contentFit="cover"
+            />
+          )}
+          {/* Tag badge — bg-[#A7CF38] absolute bottom-[-14px] left-4 */}
+          <View style={styles.tagBadge}>
+            <Text style={styles.tagText}>{step.tag}</Text>
+          </View>
         </View>
-      </View>
 
-      {/* Card body */}
-      <View style={styles.cardBody}>
-        {/* Title — text-[28px] font-[700] text-primary */}
-        <Text style={styles.cardTitle}>{step.title}</Text>
-        {/* Description — text-[14px] text-neutral-gray-dark */}
-        <Text style={styles.cardDesc}>{step.description}</Text>
-        {/* Outline button — border border-[#054A86] text-[14px] rounded-[8px] */}
-        <TouchableOpacity
-          style={styles.cardBtn}
-          onPress={() => navigation.navigate(step.link)}>
-          <Text style={styles.cardBtnText}>{step.button}</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+        {/* Card body */}
+        <View style={styles.cardBody}>
+          {/* Title — text-[28px] leading-[36px] font-[700] text-primary */}
+          <Text style={styles.cardTitle}>{step.title}</Text>
+          {/* Description — text-[14px] leading-[20px] text-neutral-gray-dark */}
+          <Text style={styles.cardDesc}>{step.description}</Text>
+          {/* Outline button — border border-[#054A86] rounded-[8px] py-3 px-4 */}
+          <TouchableOpacity
+            style={styles.cardBtn}
+            onPress={() => navigation.navigate(step.link)}>
+            <Text style={styles.cardBtnText}>{step.button}</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </MotiView>
   );
 };
 
 // ── ShowCase Section ──────────────────────────────────────────────────────────
+// Web mobile: vertical stack, cards full-width with horizontal page padding.
+// The first card visually overlaps the hero with a negative top margin
+// (-mt-[145px] on web → ~ -56 on the smaller mobile hero).
 const ShowCase = () => (
   <View style={styles.showcase}>
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.showcaseScroll}>
-      {SHOWCASE_STEPS.map((step) => (
-        <ShowCaseCard key={step.tag} step={step} />
-      ))}
-    </ScrollView>
+    {SHOWCASE_STEPS.map((step, index) => (
+      <ShowCaseCard key={step.tag} step={step} index={index} />
+    ))}
   </View>
 );
 
@@ -455,16 +468,17 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   slide: {
+    flex: 1,
     backgroundColor: Colors.primaryDark,
     paddingHorizontal: 16,
-    paddingTop: 24,
-    paddingBottom: 24,
+    paddingTop: 14,
+    paddingBottom: 12,
   },
   slideImage: {
     width: '100%',
-    height: 200,                // web: h-[361px] desktop → scaled for mobile
-    borderRadius: 24,           // rounded-[24px]
-    marginBottom: 20,
+    height: 180,
+    borderRadius: 24,
+    marginBottom: 12,
   },
   slideImageBorder: {
     // border-2 border-[#A7CF38] overlay on web — approximated as margin note
@@ -474,27 +488,27 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   slideTitle: {
-    fontSize: 28,               // web lg:text-[40px], mobile text-[36px] → 28 on narrow
+    fontSize: 22,               // sized down so longest title (Slide 2) fits in 3 lines
     fontWeight: '800',
     color: Colors.neutralWhite,
-    lineHeight: 36,
-    paddingBottom: 16,
-    textAlign: 'center',        // max-md:text-center
+    lineHeight: 28,
+    paddingBottom: 8,
+    textAlign: 'center',
   },
   slideDescription: {
-    fontSize: 14,               // text-[16px] font-[700]
+    fontSize: 13,
     fontWeight: '700',
     color: Colors.neutralWhite,
-    lineHeight: 22,
-    paddingBottom: 24,
+    lineHeight: 19,
+    paddingBottom: 14,
     textAlign: 'center',
   },
   slideBtn: {
     alignSelf: 'center',
-    backgroundColor: Colors.secondary,  // bg-[#FF5C60]
+    backgroundColor: Colors.secondary,
     borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 11,
+    paddingHorizontal: 18,
   },
   slideBtnText: {
     color: Colors.neutralWhite,
@@ -520,82 +534,89 @@ const styles = StyleSheet.create({
   },
 
   // ── ShowCase ──────────────────────────────────────────────────────────────
+  // Web's `-mt-[145px]` overlap is dropped on mobile — it ate the carousel
+  // dots and made the first card sit flush against the hero's bottom edge.
+  // A normal padded section gives the dots room to breathe and the card a
+  // proper gap from the hero.
   showcase: {
-    backgroundColor: Colors.background,  // bg-[#F7F7F9]
+    backgroundColor: Colors.background,
     paddingTop: 24,
     paddingBottom: 24,
-  },
-  showcaseScroll: {
     paddingHorizontal: 16,
-    gap: 16,
+    gap: 24,
   },
   card: {
-    width: 320,                  // close to max-w-[350px]
+    width: '100%',
+    maxWidth: 350,
+    alignSelf: 'center',
     backgroundColor: Colors.neutralWhite,
-    borderRadius: 16,            // rounded-[16px]
+    borderRadius: 16,                 // rounded-[16px]
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 6,                // shadow-xl
-    overflow: 'visible',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 10,                    // shadow-xl
+    overflow: 'hidden',               // clip image to the rounded card. The
+                                      // tag badge sits inside the card bounds
+                                      // (y < cardHeight) so it isn't affected.
   },
   cardImageWrap: {
     width: '100%',
-    height: 224,                 // h-[224px]
+    height: 224,                      // h-[224px]
     position: 'relative',
+    overflow: 'visible',              // let the tag badge extend below
   },
   cardImage: {
     width: '100%',
     height: '100%',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
   },
   tagBadge: {
     position: 'absolute',
-    bottom: -14,                 // bottom-[-14px]
-    left: 16,                    // left-4
-    backgroundColor: Colors.green, // bg-[#A7CF38]
+    bottom: -14,                      // bottom-[-14px]
+    left: 16,                         // left-4
+    backgroundColor: Colors.green,    // bg-[#A7CF38]
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 16,
     zIndex: 10,
   },
   tagText: {
-    color: Colors.primaryDark,   // text-primary-dark
-    fontSize: 10,                // text-[10px]
+    color: Colors.primaryDark,        // text-primary-dark
+    fontSize: 11,                     // text-[10px]–[11px]
     fontWeight: '700',
     letterSpacing: 0.6,
   },
   cardBody: {
-    paddingTop: 32,              // pt-[32px]
-    paddingHorizontal: 24,       // px-[24px]
+    paddingTop: 32,                   // pt-[32px]
+    paddingHorizontal: 24,            // px-[24px]
     paddingBottom: 24,
   },
   cardTitle: {
-    fontSize: 24,                // text-[28px] → 24 on mobile
+    fontSize: 28,                     // text-[28px]
     fontWeight: '700',
-    color: Colors.primaryDefault, // text-primary (#04406E)
+    color: Colors.primary,            // text-primary
     marginBottom: 8,
-    lineHeight: 32,
+    lineHeight: 36,                   // leading-[36px]
+    letterSpacing: 0.1,
   },
   cardDesc: {
-    fontSize: 14,
-    color: Colors.neutralGrayDark, // text-neutral-gray-dark
-    lineHeight: 20,
-    marginBottom: 24,
+    fontSize: 14,                     // text-[14px]
+    color: Colors.neutralGrayDark,
+    lineHeight: 20,                   // leading-[20px]
+    marginBottom: 24,                 // pb-[24px]
   },
   cardBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 12,              // py-3
+    paddingHorizontal: 16,            // px-4
     borderWidth: 1,
-    borderColor: Colors.primary,   // border-[#054A86]
-    borderRadius: 8,
-    alignSelf: 'flex-start',
+    borderColor: Colors.primary,      // border-[#054A86]
+    borderRadius: 8,                  // rounded-[8px]
+    alignSelf: 'flex-start',          // w-fit
   },
   cardBtnText: {
     fontSize: 14,
     color: Colors.primaryDark,
+    lineHeight: 20,                   // leading-[20px]
     letterSpacing: 0.3,
   },
 
