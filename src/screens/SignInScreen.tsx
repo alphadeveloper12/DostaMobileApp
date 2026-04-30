@@ -409,9 +409,9 @@ const AuthSelectionPanel = ({
   // Web client    → used as fallback / consent screen
   // Android client → used for native Android OAuth (custom URI scheme must be
   //                  enabled in Google Cloud Console → Android client → Advanced settings)
-  const WEB_CLIENT_ID     = '760692328304-hiu23pr6oq24ptkq3iiqqcm8k8rn639i.apps.googleusercontent.com';
-  const ANDROID_CLIENT_ID = '760692328304-3qebl1dnrldlhme0sto6rfmkioneusfi.apps.googleusercontent.com';
-  const IOS_CLIENT_ID     = '760692328304-ono9clmtpclgluovk69kqmusjjojbu3f.apps.googleusercontent.com';
+  const WEB_CLIENT_ID     = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID!;
+  const ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID!;
+  const IOS_CLIENT_ID     = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID!;
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId:        WEB_CLIENT_ID,
     androidClientId: ANDROID_CLIENT_ID,

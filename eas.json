@@ -10,6 +10,13 @@
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleDebug"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://dosta.cloud",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAG4wytnbgV_4fNRpyDIm6xjCf8A-vMfPU",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "760692328304-hiu23pr6oq24ptkq3iiqqcm8k8rn639i.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "760692328304-3qebl1dnrldlhme0sto6rfmkioneusfi.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "760692328304-ono9clmtpclgluovk69kqmusjjojbu3f.apps.googleusercontent.com"
       }
     },
     "preview": {
@@ -21,6 +28,13 @@
       "ios": {
         "simulator": false,
         "distribution": "internal"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://dosta.cloud",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAG4wytnbgV_4fNRpyDIm6xjCf8A-vMfPU",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "760692328304-hiu23pr6oq24ptkq3iiqqcm8k8rn639i.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "760692328304-3qebl1dnrldlhme0sto6rfmkioneusfi.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "760692328304-ono9clmtpclgluovk69kqmusjjojbu3f.apps.googleusercontent.com"
       }
     },
     "production": {
@@ -30,6 +44,13 @@
       },
       "ios": {
         "distribution": "store"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://dosta.cloud",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAG4wytnbgV_4fNRpyDIm6xjCf8A-vMfPU",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "760692328304-hiu23pr6oq24ptkq3iiqqcm8k8rn639i.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "760692328304-3qebl1dnrldlhme0sto6rfmkioneusfi.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "760692328304-ono9clmtpclgluovk69kqmusjjojbu3f.apps.googleusercontent.com"
       }
     }
   },
