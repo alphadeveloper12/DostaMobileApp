@@ -405,10 +405,18 @@ const AuthSelectionPanel = ({
   const [googleLoading, setGoogleLoading] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<Method>(null);
 
-  // Google OAuth via expo-auth-session (mirrors web useGoogleLogin)
-  const GOOGLE_CLIENT_ID = '760692328304-hiu23pr6oq24ptkq3iiqqcm8k8rn639i.apps.googleusercontent.com';
+  // Google OAuth via expo-auth-session
+  // Web client    → used as fallback / consent screen
+  // Android client → used for native Android OAuth (custom URI scheme must be
+  //                  enabled in Google Cloud Console → Android client → Advanced settings)
+  const WEB_CLIENT_ID     = '760692328304-hiu23pr6oq24ptkq3iiqqcm8k8rn639i.apps.googleusercontent.com';
+  const ANDROID_CLIENT_ID = '760692328304-3qebl1dnrldlhme0sto6rfmkioneusfi.apps.googleusercontent.com';
+  const IOS_CLIENT_ID     = '760692328304-ono9clmtpclgluovk69kqmusjjojbu3f.apps.googleusercontent.com';
   const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: GOOGLE_CLIENT_ID,
+    clientId:        WEB_CLIENT_ID,
+    androidClientId: ANDROID_CLIENT_ID,
+    iosClientId:     IOS_CLIENT_ID,
+    scopes:          ['profile', 'email'],
   });
 
   useEffect(() => {

@@ -1,0 +1,52 @@
+diff --git a/node_modules/expo-image/android/.project b/node_modules/expo-image/android/.project
+new file mode 100644
+index 0000000..8560f2d
+--- /dev/null
++++ b/node_modules/expo-image/android/.project
+@@ -0,0 +1,28 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>expo-image</name>
++	<comment>Project expo-image created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1777549808111</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/expo-image/expo-module.config.json b/node_modules/expo-image/expo-module.config.json
+index 5119836..afe72e6 100644
+--- a/node_modules/expo-image/expo-module.config.json
++++ b/node_modules/expo-image/expo-module.config.json
+@@ -4,12 +4,6 @@
+     "modules": ["ImageModule"]
+   },
+   "android": {
+-    "modules": ["expo.modules.image.ExpoImageModule"],
+-    "publication": {
+-      "groupId": "BareExpo",
+-      "artifactId": "expo.modules.image",
+-      "version": "3.0.11",
+-      "repository": "local-maven-repo"
+-    }
++    "modules": ["expo.modules.image.ExpoImageModule"]
+   }
+ }

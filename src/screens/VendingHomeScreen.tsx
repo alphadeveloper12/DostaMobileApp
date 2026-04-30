@@ -55,6 +55,7 @@ import Carousel from '@/components/ui/Carousel';
 import AnimateOnScroll from '@/components/ui/AnimateOnScroll';
 import { useDispatch, useSelector } from 'react-redux';
 import { MotiView } from 'moti';
+import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Colors } from '@/utils/colors';
 import {
   fetchLocations,
@@ -70,6 +71,15 @@ import Footer from '@/components/layout/Footer';
 import MobileFooterNav from '@/components/layout/MobileFooterNav';
 
 const { width: SCREEN_W } = Dimensions.get('window');
+
+// Fallback vending locations with Dubai coordinates (mirrors web VendingMap.tsx)
+const FALLBACK_VENDING_LOCATIONS = [
+  { id: 1, name: 'Barsha 1',       position: { lat: 25.118, lng: 55.201 }, info: 'Near Mall of the Emirates, St. 12', hours: 'Open - Closes at 10 PM' },
+  { id: 2, name: 'JLT Cluster D',  position: { lat: 25.073, lng: 55.141 }, info: 'Beside Carrefour Market',           hours: 'Open 24 Hours' },
+  { id: 3, name: 'Business Bay',   position: { lat: 25.189, lng: 55.273 }, info: 'Close to Bay Avenue Mall',          hours: 'Open - Closes at 9 PM' },
+];
+
+const MAP_CENTER = { latitude: 25.118, longitude: 55.201 };
 
 // Exact slide data from SliderSection.tsx
 const DAY_SLIDES = [
@@ -128,6 +138,26 @@ const VendingLocatorSidebar = ({
   const navigation = useNavigation<any>();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView]   = useState<'list' | 'map'>('list');
+  const mapRef = useRef<MapView>(null);
+
+  // Locations for the map — prefer store data that has coordinates, else use fallback
+  const mapLocations: any[] = (
+    vendingLocations.filter((l: any) => l?.position?.lat && l?.position?.lng).length
+      ? vendingLocations
+      : FALLBACK_VENDING_LOCATIONS
+  );
+
+  // Pan map to selected location whenever it changes while map is visible
+  useEffect(() => {
+    if (activeView === 'map' && selectedLocation?.position) {
+      mapRef.current?.animateToRegion({
+        latitude:  selectedLocation.position.lat,
+        longitude: selectedLocation.position.lng,
+        latitudeDelta:  0.05,
+        longitudeDelta: 0.05,
+      }, 600);
+    }
+  }, [selectedLocation, activeView]);
 
   const filtered = vendingLocations
     .filter((loc: any) =>
@@ -203,6 +233,7 @@ const VendingLocatorSidebar = ({
               {(['list', 'map'] as const).map((view) => (
                 <TouchableOpacity
                   key={view}
+                  activeOpacity={0.85}
                   style={[
                     sidebarStyles.toggleBtn,
                     activeView === view && sidebarStyles.toggleBtnActive,
@@ -265,13 +296,62 @@ const VendingLocatorSidebar = ({
             </ScrollView>
           )}
 
-          {/* Map view placeholder */}
+          {/* Map view — mirrors web VendingMap.tsx */}
           {activeView === 'map' && (
-            <View style={sidebarStyles.mapPlaceholder}>
-              <Text style={{ color: Colors.neutralGray, textAlign: 'center' }}>
-                Map view requires Google Maps native key configuration.{'\n'}
-                Use List view to select a location.
-              </Text>
+            <View style={sidebarStyles.mapContainer}>
+              <MapView
+                ref={mapRef}
+                style={StyleSheet.absoluteFillObject}
+                provider={PROVIDER_GOOGLE}
+                initialRegion={{
+                  ...MAP_CENTER,
+                  latitudeDelta:  0.8,
+                  longitudeDelta: 0.8,
+                }}
+                showsUserLocation={false}
+                toolbarEnabled={false}
+                onMapReady={() => {
+                  if (mapLocations.length > 0) {
+                    mapRef.current?.fitToCoordinates(
+                      mapLocations.map((l: any) => ({
+                        latitude:  l.position.lat,
+                        longitude: l.position.lng,
+                      })),
+                      { edgePadding: { top: 60, right: 40, bottom: 60, left: 40 }, animated: true },
+                    );
+                  }
+                }}
+              >
+                {mapLocations.map((loc: any) => {
+                  const isSelected = selectedLocation?.id === loc.id;
+                  return (
+                    <Marker
+                      key={loc.id}
+                      coordinate={{
+                        latitude:  loc.position.lat,
+                        longitude: loc.position.lng,
+                      }}
+                      onPress={() => onLocationSelect(loc)}
+                      pinColor={isSelected ? Colors.secondaryRed : Colors.primary}
+                    >
+                      <Callout tooltip>
+                        <View style={sidebarStyles.callout}>
+                          <View style={sidebarStyles.calloutBadge}>
+                            <Text style={sidebarStyles.calloutBadgeText}>
+                              {isSelected ? 'SELECTED LOCATION' : loc.name.toUpperCase()}
+                            </Text>
+                          </View>
+                          <Text style={sidebarStyles.calloutName}>{loc.name}</Text>
+                          <Text style={sidebarStyles.calloutInfo}>{loc.info}</Text>
+                          {loc.hours ? (
+                            <Text style={sidebarStyles.calloutHours}>{loc.hours}</Text>
+                          ) : null}
+                        </View>
+                      </Callout>
+                    </Marker>
+                  );
+                })}
+              </MapView>
             </View>
           )}
 
@@ -282,7 +362,7 @@ const VendingLocatorSidebar = ({
           <View
             style={[
               sidebarStyles.footer,
-              { paddingBottom: 2 },
+              { paddingBottom: 16 },
             ]}>
             <TouchableOpacity
               style={[
@@ -719,6 +799,7 @@ const sidebarStyles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
+    backgroundColor: 'transparent',
   },
   toggleBtnActive: {
     backgroundColor: Colors.primary,
@@ -745,6 +826,7 @@ const sidebarStyles = StyleSheet.create({
     gap: 16,
   },
   locationCard: {
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 16,
@@ -796,6 +878,50 @@ const sidebarStyles = StyleSheet.create({
   selectBtnText: {
     fontSize: 14,
     color: Colors.neutralDark,
+  },
+  mapContainer: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  // InfoWindow equivalent — mirrors web VendingMap InfoWindow div
+  callout: {
+    width: 260,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#2B2B43',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  calloutBadge: {
+    backgroundColor: Colors.green,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginBottom: 8,
+  },
+  calloutBadgeText: {
+    color: Colors.primary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  calloutName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  calloutInfo: {
+    fontSize: 13,
+    color: '#4B5563',
+  },
+  calloutHours: {
+    fontSize: 13,
+    color: '#4B5563',
+    marginTop: 4,
   },
   mapPlaceholder: {
     flex: 1,

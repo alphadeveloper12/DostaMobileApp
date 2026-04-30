@@ -18,12 +18,26 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.dosta.mobile",
+      "buildNumber": "2",
       "config": {
-        "googleMapsApiKey": "YOUR_IOS_GOOGLE_MAPS_API_KEY"
+        "googleMapsApiKey": "AIzaSyAG4wytnbgV_4fNRpyDIm6xjCf8A-vMfPU"
       },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "We use your location to find the nearest vending machine.",
-        "NSLocationAlwaysUsageDescription": "We use your location to find the nearest vending machine."
+        "NSLocationAlwaysUsageDescription": "We use your location to find the nearest vending machine.",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.760692328304-ono9clmtpclgluovk69kqmusjjojbu3f"
+            ]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.760692328304-ono9clmtpclgluovk69kqmusjjojbu3f"
+            ]
+          }
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -34,7 +48,7 @@
       "package": "com.dosta.mobile",
       "config": {
         "googleMaps": {
-          "apiKey": "YOUR_ANDROID_GOOGLE_MAPS_API_KEY"
+          "apiKey": "AIzaSyAG4wytnbgV_4fNRpyDIm6xjCf8A-vMfPU"
         }
       },
       "permissions": [
@@ -50,7 +64,10 @@
       "expo-web-browser"
     ],
     "extra": {
-      "apiUrl": "https://dosta.cloud"
+      "apiUrl": "https://dosta.cloud",
+      "eas": {
+        "projectId": "72bca3af-2895-46f3-9316-0c4ee93d4071"
+      }
     }
   }
 }

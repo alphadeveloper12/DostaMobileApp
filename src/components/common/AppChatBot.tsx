@@ -61,7 +61,7 @@ export const openAppChatBot = () => openers.forEach(fn => fn());
 const FOOTER_NAV_H  = 82;   // MobileFooterNav height
 const FAB_H         = 60;
 const FAB_GAP       = 16;   // gap between FAB and panel
-const FAB_BOTTOM_PAD = 16;  // gap above the footer nav
+const FAB_BOTTOM_PAD = 4;   // gap above the footer nav
 
 const INITIAL_MESSAGE: Message = {
   role: 'bot',

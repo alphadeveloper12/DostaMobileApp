@@ -45,7 +45,7 @@ export default function MobileFooterNav() {
  };
 
  return (
-  <View style={[styles.nav, { paddingBottom: insets.bottom }]}>
+  <View style={[styles.nav, { paddingBottom: Math.max(insets.bottom, 12) }]}>
    <View style={styles.row}>
     {navItems.map(({ href, Icon, label }) => {
      const isActive = route.name === href;
