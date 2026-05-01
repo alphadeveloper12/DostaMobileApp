@@ -39,12 +39,13 @@
     },
     "production": {
       "node": "20.19.4",
-      "credentialsSource": "local",
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "credentialsSource": "local"
       },
       "ios": {
-        "distribution": "store"
+        "distribution": "store",
+        "credentialsSource": "remote"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://dosta.cloud",
