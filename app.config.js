@@ -19,7 +19,7 @@ module.exports = {
     assetBundlePatterns: ['**/*'],
     ios: {
       supportsTablet: false,
-      bundleIdentifier: 'com.dosta.mobile',
+      bundleIdentifier: 'com.dosta.app',
       buildNumber: '2',
       config: {
         googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
@@ -44,7 +44,7 @@ module.exports = {
         foregroundImage: './src/assets/icon.png',
         backgroundColor: '#054A86',
       },
-      package: 'com.dosta.mobile',
+      package: 'com.dosta.app',
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
