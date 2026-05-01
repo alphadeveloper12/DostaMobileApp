@@ -2,3 +2,5 @@ node_modules/
 android/
 .expo/
 .env
+google-play-key.json
+credentials.json
