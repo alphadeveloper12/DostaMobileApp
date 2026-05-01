@@ -39,9 +39,9 @@ export const HeroSlide3 = require('./header/Slide3.png');
 export const HeroSlide4 = require('./header/Slide4.png');
 
 // ── ShowCase card images ──────────────────────────────────────────────────────
-export const Card2Svg    = require('./header/card2.svg').default;
+export const Card2Jpg    = require('./header/card2.jpg');
 export const Card3Jpg    = require('./header/card3.jpeg');
-export const Card4Svg    = require('./header/card4.svg').default;
+export const Card4Jpg    = require('./header/card4.jpg');
 
 // ── Vending home ─────────────────────────────────────────────────────────────
 export const HeroVending  = require('./vending_home/hero-vending.png');

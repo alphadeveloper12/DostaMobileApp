@@ -57,9 +57,6 @@ import { useNavigation } from '@react-navigation/native';
 import Carousel from '@/components/ui/Carousel';
 import { MotiView } from 'moti';
 
-// Local SVG assets as React components
-import Card2Svg       from '@/assets/images/header/card2.svg';
-import Card4Svg       from '@/assets/images/header/card4.svg';
 import PromoburgerSvg from '@/assets/images/icons/promoburger.svg';
 import PromomobileSvg from '@/assets/images/icons/promomobile.svg';
 import { Colors } from '@/utils/colors';
@@ -105,8 +102,8 @@ const SLIDER_DATA = [
 // SVG icons are imported as React components; JPEG as require()
 const SHOWCASE_STEPS = [
   {
-    IconComponent: Card2Svg,
-    imgSource:     null,
+    IconComponent: null,
+    imgSource:     require('@/assets/images/header/card2.jpg'),
     title:  'Meals on Your Schedule',
     description: 'Plan your week with nutritious meals placed in vending stations near you',
     tag:    'DOSTA VENDING',
@@ -114,8 +111,8 @@ const SHOWCASE_STEPS = [
     link:   'VendingHome',
   },
   {
-    IconComponent: Card4Svg,
-    imgSource:     null,
+    IconComponent: null,
+    imgSource:     require('@/assets/images/header/card4.jpg'),
     title:  'Flavorful Catering for Any Event',
     description: 'From private gatherings to grand celebrations, we craft unforgettable meals',
     tag:    'DOSTA CATERING',

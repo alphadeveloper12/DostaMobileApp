@@ -11,6 +11,7 @@ src/assets/images/icons/snacks.svg
 src/assets/images/icons/Starters.svg
 src/assets/images/icons/mains.svg
 src/assets/images/header/card2.svg
+src/assets/images/header/card4.svg
 
 # Dev-only files
 node_modules/.cache/
