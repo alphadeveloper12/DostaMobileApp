@@ -1,6 +1,12 @@
 node_modules/
-android/
 .expo/
 .env
 google-play-key.json
 credentials.json
+
+# Android build output only (not the project itself)
+android/build/
+android/app/build/
+android/.gradle/
+android/app/.cxx/
+android/app/src/main/assets/

@@ -1,0 +1,23 @@
+# Exclude large asset folders not needed for the EAS build
+# (Metro bundles only statically require()d assets — the rest are served via API)
+src/assets/images/catering/
+src/assets/images/icons/Canapes.svg
+src/assets/images/icons/coffee_station.svg
+src/assets/images/icons/Cold_Beverages.svg
+src/assets/images/icons/Desserts.svg
+src/assets/images/icons/Hot_Beverages.svg
+src/assets/images/icons/ice_cream_station.svg
+src/assets/images/icons/snacks.svg
+src/assets/images/icons/Starters.svg
+src/assets/images/icons/mains.svg
+src/assets/images/header/card2.svg
+
+# Dev-only files
+node_modules/.cache/
+.expo/
+android/build/
+android/app/build/
+android/.gradle/
+ios/build/
+ios/Pods/
+dist/
