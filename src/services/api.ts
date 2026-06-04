@@ -43,6 +43,11 @@ export const getProfile = () => api.get('/api/profile/');
 
 export const updateProfile = (data: any) => api.put('/api/profile/', data);
 
+// Permanent account deletion — required by Apple App Store guideline 5.1.1(v).
+// `password` is only required for users with a local password (not Google OAuth).
+export const deleteAccount = (payload: { confirmation: string; password?: string }) =>
+  api.post('/api/delete-account/', payload);
+
 // ─────────────────────────────────────────────
 // VENDING — MENU
 // ─────────────────────────────────────────────

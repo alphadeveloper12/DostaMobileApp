@@ -18,7 +18,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.dosta.app",
-      "buildNumber": "2",
+      "buildNumber": "10",
       "config": {
         "googleMapsApiKey": "AIzaSyAG4wytnbgV_4fNRpyDIm6xjCf8A-vMfPU"
       },
@@ -46,6 +46,7 @@
         "backgroundColor": "#054A86"
       },
       "package": "com.dosta.app",
+      "versionCode": 10,
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyAG4wytnbgV_4fNRpyDIm6xjCf8A-vMfPU"

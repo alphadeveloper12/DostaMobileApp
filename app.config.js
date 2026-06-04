@@ -20,7 +20,7 @@ module.exports = {
     ios: {
       supportsTablet: false,
       bundleIdentifier: 'com.dosta.app',
-      buildNumber: '2',
+      buildNumber: '10',
       config: {
         googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
       },
@@ -45,6 +45,7 @@ module.exports = {
         backgroundColor: '#054A86',
       },
       package: 'com.dosta.app',
+      versionCode: 10,
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,

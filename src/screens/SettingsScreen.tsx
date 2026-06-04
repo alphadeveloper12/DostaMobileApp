@@ -38,7 +38,7 @@ import VisaIcon      from '@/assets/images/icons/visa.svg';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
-  StyleSheet, ActivityIndicator, Switch,
+  StyleSheet, ActivityIndicator, Switch, Modal,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -55,7 +55,7 @@ import Shimmer from '@/components/ui/Shimmer';
 import { getAuthToken, removeAuthToken, removeUser, storage } from '@/utils/storage';
 import { clearUser } from '@/store/slices/userSlice';
 import { clearCart } from '@/store/slices/cartSlice';
-import { BASE_URL } from '@/services/api';
+import { BASE_URL, deleteAccount } from '@/services/api';
 
 // Sidebar nav items — exact from web SettingsLayout
 const NAV_ITEMS = [
@@ -88,6 +88,14 @@ const AccountSettings = () => {
   const [loading,       setLoading]       = useState(true);
   const [updating,      setUpdating]      = useState(false);
   const [notifications, setNotifications] = useState<string[]>([]);
+
+  // Delete-account state. Two-step confirmation: user must tap Delete, then
+  // type DELETE in the modal (and re-enter their password if applicable)
+  // before the destructive request fires. Required by Apple guideline 5.1.1(v).
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirm,   setDeleteConfirm]   = useState('');
+  const [deletePassword,  setDeletePassword]  = useState('');
+  const [deleting,        setDeleting]        = useState(false);
 
   useEffect(() => {
     const fetch_ = async () => {
@@ -162,6 +170,35 @@ const AccountSettings = () => {
     navigation.reset({ index: 0, routes: [{ name: 'SignIn' }] });
   };
 
+  const handleDeleteAccount = async () => {
+    if (deleteConfirm.trim().toUpperCase() !== 'DELETE') {
+      showToast({ type: 'error', text1: 'Please type DELETE to confirm.' });
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deleteAccount({
+        confirmation: deleteConfirm,
+        password: deletePassword || undefined,
+      });
+      // Clear local session — same teardown as logout — then send the user
+      // back to SignIn so they can't act on a now-deleted account.
+      await removeAuthToken();
+      await removeUser();
+      await storage.removeItem('selectedLocation');
+      dispatch(clearUser());
+      dispatch(clearCart());
+      setShowDeleteModal(false);
+      showToast({ type: 'success', text1: 'Your account has been deleted.' });
+      navigation.reset({ index: 0, routes: [{ name: 'SignIn' }] });
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || 'Failed to delete account.';
+      showToast({ type: 'error', text1: msg });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) return <Shimmer />;
 
   return (
@@ -210,6 +247,88 @@ const AccountSettings = () => {
           </View>
         ))}
       </View>
+
+      {/* Delete Account — Apple App Store guideline 5.1.1(v) requires apps
+          that support account creation to also offer in-app account
+          deletion. Surfaced as a clearly destructive card so it isn't
+          confused with Logout. */}
+      <View style={settingsStyles.dangerCard}>
+        <Text style={settingsStyles.dangerTitle}>Delete account</Text>
+        <Text style={settingsStyles.dangerBody}>
+          Permanently delete your Dosta account and all associated data,
+          including your profile, addresses, payment methods, and order
+          history. This action cannot be undone.
+        </Text>
+        <TouchableOpacity
+          style={settingsStyles.dangerBtn}
+          onPress={() => {
+            setDeleteConfirm('');
+            setDeletePassword('');
+            setShowDeleteModal(true);
+          }}>
+          <Text style={settingsStyles.dangerBtnText}>Delete my account</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Two-step confirmation modal: user must type DELETE (and re-enter
+          their password if they have a local one) before the request fires. */}
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}>
+        <View style={settingsStyles.modalBackdrop}>
+          <View style={settingsStyles.modalCard}>
+            <Text style={settingsStyles.modalTitle}>Delete account?</Text>
+            <Text style={settingsStyles.modalBody}>
+              This will permanently delete your account and all related data.
+              You will not be able to recover it.
+            </Text>
+
+            <Text style={settingsStyles.fieldLabel}>
+              Type DELETE to confirm
+            </Text>
+            <TextInput
+              style={settingsStyles.fieldInput}
+              placeholder="DELETE"
+              placeholderTextColor={Colors.neutralGrayLight}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              value={deleteConfirm}
+              onChangeText={setDeleteConfirm}
+            />
+
+            <Text style={[settingsStyles.fieldLabel, { marginTop: 12 }]}>
+              Password (leave blank if you signed up with Google)
+            </Text>
+            <TextInput
+              style={settingsStyles.fieldInput}
+              placeholder="Enter your password"
+              placeholderTextColor={Colors.neutralGrayLight}
+              secureTextEntry
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+            />
+
+            <View style={settingsStyles.modalActions}>
+              <TouchableOpacity
+                style={settingsStyles.discardBtn}
+                onPress={() => setShowDeleteModal(false)}
+                disabled={deleting}>
+                <Text style={settingsStyles.discardBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[settingsStyles.dangerBtn, { marginTop: 8 }]}
+                onPress={handleDeleteAccount}
+                disabled={deleting}>
+                {deleting
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={settingsStyles.dangerBtnText}>Delete forever</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Footer button row — web has Logout / Discard / Save in a single
           flex row that stacks vertically on mobile. Save and Discard stay
@@ -886,4 +1005,62 @@ const settingsStyles = StyleSheet.create({
   },
   chipText: { fontSize: 13, color: Colors.neutralGrayDark, fontWeight: '500' },
   chipTextActive: { color: Colors.primary, fontWeight: '700' },
+  // Destructive "Delete account" card — uses red borders/text to clearly
+  // signal a permanent action and prevent confusion with Logout.
+  dangerCard: {
+    borderWidth: 1,
+    borderColor: '#FFD7D8',
+    backgroundColor: '#FFF6F6',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  dangerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#C0282B',
+    marginBottom: 8,
+  },
+  dangerBody: {
+    fontSize: 13,
+    color: '#7A1F22',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  dangerBtn: {
+    backgroundColor: '#D03135',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  dangerBtnText: { color: Colors.neutralWhite, fontWeight: '700', fontSize: 14 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: Colors.neutralWhite,
+    borderRadius: 16,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.neutralBlack,
+    marginBottom: 8,
+  },
+  modalBody: {
+    fontSize: 13,
+    color: Colors.neutralGrayDark,
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: 'column',
+    marginTop: 16,
+  },
 });
