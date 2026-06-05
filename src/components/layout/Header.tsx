@@ -21,11 +21,15 @@ import {
   TextInput,
   StyleSheet,
   StatusBar,
+  Image as RNImage,
 } from 'react-native';
 // SVG files imported as React components via react-native-svg-transformer
 import LogoSvg         from '@/assets/images/nav/logo.svg';
 import VendingLogo     from '@/assets/images/nav/vending_logo.svg';
 import CateringLogo    from '@/assets/images/nav/catering_logo.svg';
+// Beit Nahla uses a raster PNG logo (web swaps to /images/header/nahla.png on
+// /beit-nahla). Rendered via RN core Image — it's a require()'d local asset.
+const NahlaLogo = require('@/assets/images/header/nahla.png');
 import DostaBlue       from '@/assets/images/nav/dosta_blue.svg';
 import UserProfile     from '@/assets/images/nav/user_profile.svg';
 import SearchBox       from '@/assets/images/nav/searchbox.svg';
@@ -42,7 +46,7 @@ import { clearUser } from '@/store/slices/userSlice';
 import { clearCart, selectTotalCartItems, fetchCartData } from '@/store/slices/cartSlice';
 import { useLang, toggleLang } from '@/utils/i18n';
 
-type HeaderVariant = 'home' | 'vending' | 'catering';
+type HeaderVariant = 'home' | 'vending' | 'catering' | 'beitnahla';
 
 export default function Header({ variant = 'home' }: { variant?: HeaderVariant }) {
   const insets = useSafeAreaInsets();
@@ -58,7 +62,10 @@ export default function Header({ variant = 'home' }: { variant?: HeaderVariant }
   // based on this value.
   const lang = useLang();
 
-  const isLight = variant !== 'home'; // catering & vending = white-bg variant
+  // catering & vending = white-bg variant. home & beitnahla = dark bg: the web
+  // /beit-nahla page uses the generic dark Header (bg-primary-dark) with the
+  // login/profile controls, not the white vending header.
+  const isLight = variant !== 'home' && variant !== 'beitnahla';
 
   const checkAuth = useCallback(async () => {
     const token = await getAuthToken();
@@ -116,7 +123,9 @@ export default function Header({ variant = 'home' }: { variant?: HeaderVariant }
   );
 
   // Logo per variant — vending/catering logos already include the "DOSTA |
-  // VENDING" / "DOSTA | CATERING" text rendered as a single SVG.
+  // VENDING" / "DOSTA | CATERING" text rendered as a single SVG. Beit Nahla
+  // uses a raster PNG (web swaps to nahla.png on /beit-nahla).
+  const isBeitNahla = variant === 'beitnahla';
   const Logo =
     variant === 'vending'  ? VendingLogo  :
     variant === 'catering' ? CateringLogo :
@@ -141,7 +150,15 @@ export default function Header({ variant = 'home' }: { variant?: HeaderVariant }
           {/* Left: Logo */}
           <View style={styles.left}>
             <TouchableOpacity onPress={() => navigation.navigate('Home')}>
-              <Logo width={logoWidth} height={logoHeight} />
+              {isBeitNahla ? (
+                <RNImage
+                  source={NahlaLogo}
+                  style={styles.beitNahlaLogo}
+                  resizeMode="contain"
+                />
+              ) : (
+                <Logo width={logoWidth} height={logoHeight} />
+              )}
             </TouchableOpacity>
           </View>
 
@@ -307,6 +324,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  // Beit Nahla raster logo — contain so the PNG keeps its aspect ratio.
+  beitNahlaLogo: {
+    width: 120,
+    height: 40,
   },
   right: {
     flexDirection: 'row',

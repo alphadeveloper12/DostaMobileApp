@@ -344,7 +344,7 @@ export default function BeitNahlaScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <Header variant="vending" />
+      <Header variant="beitnahla" />
 
       <ScrollView
         style={styles.scroll}
