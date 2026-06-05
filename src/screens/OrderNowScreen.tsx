@@ -113,7 +113,9 @@ const FoodCard = ({ item, qty, onAdd, onRemove, onPress, isSoldOut, isLocked }: 
         (isSoldOut || isLocked) && { opacity: 0.6 },
       ]}
       onPress={onPress}
-      disabled={isLocked}
+      // Sold-out (and locked) cards are fully disabled: tapping does nothing —
+      // no detail sidebar opens, so the item can't be added.
+      disabled={isSoldOut || isLocked}
       activeOpacity={0.85}>
 
       {/* Image — web mobile h-[120px] rounded-[12px] */}
@@ -1328,7 +1330,7 @@ export default function OrderNowScreen() {
                                           ? prev.filter((_, j) => j !== i)
                                           : prev.map((p, j) => j === i ? { ...p, quantity: newQ } : p);
                                       })}
-                                      onPress={() => !isLocked && setSelectedItem(data)}
+                                      onPress={() => !isLocked && !isSoldOut && setSelectedItem(data)}
                                     />
                                     {/* "Only N left" badge — web shows when stock < 5 */}
                                     {!isSoldOut && !isLocked && spot.presentNumber > 0 && spot.presentNumber < 5 && (
