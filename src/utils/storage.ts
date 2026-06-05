@@ -18,7 +18,18 @@ export const storage = {
   async getItem(key: string): Promise<string | null> {
     try {
       if (SECURE_KEYS.has(key)) {
-        return await SecureStore.getItemAsync(key);
+        // Prefer SecureStore, but fall back to AsyncStorage. On some
+        // devices/builds SecureStore can throw or return null even after a
+        // successful write (keystore quirks, value-size limits, missing native
+        // module). Without this fallback getAuthToken() returns null after a
+        // valid login, which bounces logged-in users back to SignIn.
+        try {
+          const secure = await SecureStore.getItemAsync(key);
+          if (secure != null) return secure;
+        } catch {
+          // fall through to AsyncStorage
+        }
+        return await AsyncStorage.getItem(key);
       }
       return await AsyncStorage.getItem(key);
     } catch {
@@ -27,24 +38,40 @@ export const storage = {
   },
 
   async setItem(key: string, value: string): Promise<void> {
-    try {
-      if (SECURE_KEYS.has(key)) {
+    if (SECURE_KEYS.has(key)) {
+      // Best-effort secure write; mirror to AsyncStorage so the value is always
+      // retrievable even if SecureStore silently fails. Mirrors the web's
+      // posture (it keeps the auth token in localStorage).
+      let secureOk = false;
+      try {
         await SecureStore.setItemAsync(key, value);
-      } else {
-        await AsyncStorage.setItem(key, value);
+        secureOk = true;
+      } catch {
+        secureOk = false;
       }
+      try {
+        if (!secureOk) await AsyncStorage.setItem(key, value);
+      } catch {
+        // silent
+      }
+      return;
+    }
+    try {
+      await AsyncStorage.setItem(key, value);
     } catch {
       // silent
     }
   },
 
   async removeItem(key: string): Promise<void> {
+    if (SECURE_KEYS.has(key)) {
+      // Clear from both stores so logout fully tears down the session.
+      try { await SecureStore.deleteItemAsync(key); } catch { /* silent */ }
+      try { await AsyncStorage.removeItem(key); } catch { /* silent */ }
+      return;
+    }
     try {
-      if (SECURE_KEYS.has(key)) {
-        await SecureStore.deleteItemAsync(key);
-      } else {
-        await AsyncStorage.removeItem(key);
-      }
+      await AsyncStorage.removeItem(key);
     } catch {
       // silent
     }
@@ -90,6 +117,17 @@ export const setSweetsDeliveryInfo = (info: any) => storage.setJSON('sweetsDeliv
 export const getPendingCateringOrder = () => storage.getJSON<any>('pendingCateringOrder');
 export const setPendingCateringOrder = (order: any) => storage.setJSON('pendingCateringOrder', order);
 export const removePendingCateringOrder = () => storage.removeItem('pendingCateringOrder');
+
+// Beit Nahla — mirrors web's dedicated localStorage keys. The vending backend
+// has no FK for BEIT_NAHLA boxes, so we keep the selected boxes client-side
+// and the cart merges them in on load (same approach as the web app).
+export const getBeitNahlaCart = () => storage.getJSON<any>('beitNahlaCart');
+export const setBeitNahlaCart = (cart: any) => storage.setJSON('beitNahlaCart', cart);
+export const removeBeitNahlaCart = () => storage.removeItem('beitNahlaCart');
+
+export const getBeitNahlaDeliveryInfo = () => storage.getJSON<any>('beitNahlaDeliveryInfo');
+export const setBeitNahlaDeliveryInfo = (info: any) => storage.setJSON('beitNahlaDeliveryInfo', info);
+export const removeBeitNahlaDeliveryInfo = () => storage.removeItem('beitNahlaDeliveryInfo');
 
 export const getMachineGoodsCache = (serialNumber: string) =>
   storage.getJSON<any>(`machine_goods_${serialNumber}`);

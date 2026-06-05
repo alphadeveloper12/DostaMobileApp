@@ -35,6 +35,7 @@ import {
   StyleSheet,
   Dimensions,
   Alert,
+  Image as RNImage,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -60,7 +61,13 @@ WebBrowser.maybeCompleteAuthSession();
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
+// ── Logo image (dosta_blue.svg) ───────────────────────────────────────────────
+import DostaBlue from '@/assets/images/nav/dosta_blue.svg';
+const AUTH_SLIDER = require('@/assets/images/auth/slider-image.jpg');
+
 // ── Slider images (same as web: all use slider-image.jpg) ─────────────────────
+// AUTH_SLIDER is declared above so this const can reference it safely (avoids a
+// temporal-dead-zone forward reference).
 const SLIDES = [
   {
     img: AUTH_SLIDER,
@@ -78,10 +85,6 @@ const SLIDES = [
     subtitle: 'We bring nourishment with every bite.',
   },
 ];
-
-// ── Logo image (dosta_blue.svg) ───────────────────────────────────────────────
-import DostaBlue from '@/assets/images/nav/dosta_blue.svg';
-const AUTH_SLIDER = require('@/assets/images/auth/slider-image.jpg');
 
 // ── Google SVG icon (inline, exact from web) ──────────────────────────────────
 // Rendered as expo-image with network URI
@@ -108,11 +111,13 @@ const AuthSlider = () => {
 
   return (
     <View style={styles.sliderContainer}>
-      <Image
-        source={{ uri: slide.img }}
+      {/* slide.img is a require()'d local asset (a module id, not a URL), so it
+          must be passed directly — NOT wrapped in { uri }. Use RN core Image:
+          expo-image renders bundled require() assets blank on the new arch. */}
+      <RNImage
+        source={slide.img}
         style={styles.sliderImage}
-        contentFit="cover"
-        transition={700}
+        resizeMode="cover"
       />
       {/* Dark overlay bg-black/30 */}
       <View style={styles.sliderOverlay} />
@@ -405,17 +410,24 @@ const AuthSelectionPanel = ({
   const [googleLoading, setGoogleLoading] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<Method>(null);
 
-  // Google OAuth via expo-auth-session
-  // Web client    → used as fallback / consent screen
-  // Android client → used for native Android OAuth (custom URI scheme must be
-  //                  enabled in Google Cloud Console → Android client → Advanced settings)
-  const WEB_CLIENT_ID     = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID!;
-  const ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID!;
-  const IOS_CLIENT_ID     = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID!;
+  // Google OAuth via expo-auth-session.
+  // The client IDs come from EXPO_PUBLIC_GOOGLE_* env vars. When they're NOT
+  // set (e.g. no .env in the build), expo-auth-session's useAuthRequest throws
+  // synchronously ("Client Id property `androidClientId` must be defined…"),
+  // which CRASHES this screen on mount. Hooks can't be called conditionally,
+  // so we always call it but feed harmless placeholders when unconfigured and
+  // gate the actual prompt behind `googleConfigured`. The redirect URI is
+  // derived from the app's bundle id (not the client id), so a placeholder is
+  // safe here.
+  const WEB_CLIENT_ID     = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  const ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+  const IOS_CLIENT_ID     = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+  const googleConfigured  = !!(WEB_CLIENT_ID && ANDROID_CLIENT_ID && IOS_CLIENT_ID);
+  const PLACEHOLDER_ID    = 'unconfigured.apps.googleusercontent.com';
   const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId:        WEB_CLIENT_ID,
-    androidClientId: ANDROID_CLIENT_ID,
-    iosClientId:     IOS_CLIENT_ID,
+    clientId:        WEB_CLIENT_ID     || PLACEHOLDER_ID,
+    androidClientId: ANDROID_CLIENT_ID || PLACEHOLDER_ID,
+    iosClientId:     IOS_CLIENT_ID     || PLACEHOLDER_ID,
     scopes:          ['profile', 'email'],
   });
 
@@ -531,9 +543,18 @@ const AuthSelectionPanel = ({
         ]}
         onPress={() => {
           if (selectedMethod === 'email') onEmailPress();
-          else if (selectedMethod === 'google' && request) promptAsync();
+          else if (selectedMethod === 'google') {
+            if (!googleConfigured) {
+              Alert.alert(
+                'Google sign-in unavailable',
+                "Google sign-in isn't set up in this build. Please sign in with your email instead.",
+              );
+              return;
+            }
+            if (request) promptAsync();
+          }
         }}
-        disabled={!selectedMethod || (selectedMethod === 'google' && !request)}
+        disabled={!selectedMethod || (selectedMethod === 'google' && googleConfigured && !request)}
         activeOpacity={0.85}>
         <Text style={styles.primaryBtnText}>Continue</Text>
       </TouchableOpacity>

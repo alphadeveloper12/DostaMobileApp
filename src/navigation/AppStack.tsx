@@ -23,6 +23,9 @@ import RequestCustomQuoteScreen  from '@/screens/catering/RequestCustomQuoteScre
 // Sweets
 import DostaSweets from '@/screens/DostaSweets';
 
+// Beit Nahla
+import BeitNahlaScreen from '@/screens/BeitNahlaScreen';
+
 // Auth
 import SignInScreen from '@/screens/SignInScreen';
 import SignUpScreen from '@/screens/SignUpScreen';
@@ -59,6 +62,7 @@ export type AppStackParamList = {
   CateringConfirmation: { orderId?: string; orderDetails?: any; extraDetails?: any } | undefined;
   RequestCustomQuote:   undefined;
   DostaSweets:          undefined;
+  BeitNahla:            undefined;
   SignIn:               undefined;
   SignUp:               undefined;
   Settings:             undefined;
@@ -102,6 +106,9 @@ export default function AppStack() {
 
       {/* Sweets */}
       <Stack.Screen name="DostaSweets"   component={DostaSweets} />
+
+      {/* Beit Nahla */}
+      <Stack.Screen name="BeitNahla"     component={BeitNahlaScreen} />
 
       {/* Auth */}
       <Stack.Screen name="SignIn"        component={SignInScreen} />

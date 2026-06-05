@@ -4,7 +4,7 @@
  *        components/home/HeroSection.tsx   (react-slick carousel, 4 slides)
  *        components/home/ShowCase.tsx      (3-card grid with images)
  *        components/home/PromoBanners.tsx  (2 colored banners)
- *        components/home/Companies.tsx     (12 company logos)
+ *        components/home/Companies.tsx     (11 company logos)
  *        components/home/Newsletter.tsx    (email subscription)
  *
  * Web HeroSection:
@@ -32,7 +32,7 @@
  *
  * Web Companies:
  *   - bg-[#F7F7F9], h3 text-[28px] text-[#054A86] "Trusted by Leading Brands"
- *   - 12 logos grid-cols-6 (desktop), 2-3 cols mobile, each 120–160px
+ *   - 11 logos grid-cols-6 (desktop), 2-3 cols mobile, each 120–160px
  *
  * Web Newsletter:
  *   - bg-[#EDEEF2], centered text-primary h2 "Subscribe for exclusive offers"
@@ -50,8 +50,8 @@ import {
   Dimensions,
   StyleSheet,
   FlatList,
+  Image as RNImage,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Carousel from '@/components/ui/Carousel';
@@ -128,6 +128,15 @@ const SHOWCASE_STEPS = [
     button: 'Browse Menu',
     link:   'DostaSweets',
   },
+  {
+    IconComponent: null,
+    imgSource:     require('@/assets/images/header/nahla.png'),
+    title:  'Beit Nahla',
+    description: 'Beit Nahla offers a wide range of meal boxes for any occasion.',
+    tag:    'Beit Nahla',
+    button: 'Browse Menu',
+    link:   'BeitNahla',
+  },
 ];
 
 // ── PromoData — exact from web PromoBanners.tsx ───────────────────────────────
@@ -142,21 +151,20 @@ const PROMO_DATA = [
   },
 ];
 
-// Company logos — 12 total, imported as SVG components
-import C1  from '@/assets/images/company/c1.svg';
-import C2  from '@/assets/images/company/c2.svg';
-import C3  from '@/assets/images/company/c3.svg';
-import C4  from '@/assets/images/company/c4.svg';
-import C5  from '@/assets/images/company/c5.svg';
-import C6  from '@/assets/images/company/c6.svg';
-import C7  from '@/assets/images/company/c7.svg';
-import C8  from '@/assets/images/company/c8.svg';
-import C9  from '@/assets/images/company/c9.svg';
-import C10 from '@/assets/images/company/c10.svg';
-import C11 from '@/assets/images/company/c11.svg';
-import C12 from '@/assets/images/company/c12.svg';
-
-const COMPANY_LOGOS = [C1, C2, C3, C4, C5, C6, C7, C8, C9, C10, C11, C12];
+// Company logos — 11 total, updated to match web Companies.tsx (JPG images).
+const COMPANY_LOGOS = [
+  require('@/assets/images/company/1.jpg'),
+  require('@/assets/images/company/2.jpg'),
+  require('@/assets/images/company/3.jpg'),
+  require('@/assets/images/company/4.jpg'),
+  require('@/assets/images/company/5.jpg'),
+  require('@/assets/images/company/6.jpg'),
+  require('@/assets/images/company/7.jpg'),
+  require('@/assets/images/company/8.jpg'),
+  require('@/assets/images/company/9.jpg'),
+  require('@/assets/images/company/10.jpg'),
+  require('@/assets/images/company/11.jpg'),
+];
 
 // ── Hero Carousel Slide ───────────────────────────────────────────────────────
 const HeroSlide = ({
@@ -169,11 +177,13 @@ const HeroSlide = ({
   const navigation = useNavigation<any>();
   return (
     <View style={styles.slide}>
-      {/* Image — local require() for PNG slides */}
-      <Image
+      {/* Image — local require() for PNG slides. Uses RN core Image (not
+          expo-image): on the new architecture expo-image can render bundled
+          require() assets blank, while RN Image is the reference path. */}
+      <RNImage
         source={item.image}
         style={styles.slideImage}
-        contentFit="cover"
+        resizeMode="cover"
       />
       {/* Green border ring — border-2 border-[#A7CF38] on web */}
       <View style={styles.slideImageBorder} />
@@ -281,10 +291,10 @@ const ShowCaseCard = ({
               preserveAspectRatio="xMidYMid slice"
             />
           ) : (
-            <Image
+            <RNImage
               source={step.imgSource}
               style={styles.cardImage}
-              contentFit="cover"
+              resizeMode="cover"
             />
           )}
           {/* Tag badge — bg-[#A7CF38] absolute bottom-[-14px] left-4 */}
@@ -370,9 +380,13 @@ const Companies = () => (
       keyExtractor={(_, i) => String(i)}
       scrollEnabled={false}
       contentContainerStyle={styles.logosGrid}
-      renderItem={({ item: LogoComponent, index }) => (
+      renderItem={({ item: logo, index }) => (
         <View key={index} style={styles.logoCell}>
-          <LogoComponent width={100} height={100} />
+          <RNImage
+            source={logo}
+            style={styles.logoImg}
+            resizeMode="contain"
+          />
         </View>
       )}
     />

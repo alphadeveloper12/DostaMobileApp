@@ -45,6 +45,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Dimensions,
+  Image as RNImage,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -55,7 +56,7 @@ import Carousel from '@/components/ui/Carousel';
 import AnimateOnScroll from '@/components/ui/AnimateOnScroll';
 import { useDispatch, useSelector } from 'react-redux';
 import { MotiView } from 'moti';
-import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps';
+import { MapView, Marker, Callout, PROVIDER_GOOGLE, MapsAvailable, MapUnavailable } from '@/utils/maps';
 import { Colors } from '@/utils/colors';
 import {
   fetchLocations,
@@ -138,7 +139,7 @@ const VendingLocatorSidebar = ({
   const navigation = useNavigation<any>();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView]   = useState<'list' | 'map'>('list');
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
 
   // Locations for the map — prefer store data that has coordinates, else use fallback
   const mapLocations: any[] = (
@@ -296,8 +297,17 @@ const VendingLocatorSidebar = ({
             </ScrollView>
           )}
 
-          {/* Map view — mirrors web VendingMap.tsx */}
-          {activeView === 'map' && (
+          {/* Map view — mirrors web VendingMap.tsx. In Expo Go the native map
+              isn't available, so show a placeholder instead of crashing. */}
+          {activeView === 'map' && !MapsAvailable && (
+            <View style={sidebarStyles.mapContainer}>
+              <MapUnavailable
+                height={300}
+                note="Switch to the list view to pick a location, or run a development build to use the map."
+              />
+            </View>
+          )}
+          {activeView === 'map' && MapsAvailable && (
             <View style={sidebarStyles.mapContainer}>
               <MapView
                 ref={mapRef}
@@ -412,11 +422,12 @@ const VendingHeroSection = () => {
   return (
     <>
       <View style={heroStyles.container}>
-        {/* bg-cover bg-center h-[512px] */}
-        <Image
+        {/* bg-cover bg-center h-[512px] — RN core Image for the bundled
+            require() asset (expo-image renders these blank on new arch). */}
+        <RNImage
           source={require('@/assets/images/vending_home/hero-vending.png')}
           style={heroStyles.bgImage}
-          contentFit="cover"
+          resizeMode="cover"
         />
         {/* Dark overlay md:bg-black/30 */}
         <View style={heroStyles.overlay} />
@@ -455,11 +466,11 @@ const VendingHeroSection = () => {
               </Text>
             </TouchableOpacity>
 
-            {/* meal browse image */}
-            <Image
+            {/* meal browse image — RN core Image for the bundled require() asset */}
+            <RNImage
               source={require('@/assets/images/vending_home/meal_browes.png')}
               style={heroStyles.mealBrowse}
-              contentFit="contain"
+              resizeMode="contain"
             />
           </View>
         </View>

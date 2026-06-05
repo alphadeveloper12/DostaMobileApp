@@ -69,6 +69,10 @@ import {
   setGuestCart,
   removeGuestCart,
   getSweetsDeliveryInfo,
+  getBeitNahlaCart,
+  removeBeitNahlaCart,
+  getBeitNahlaDeliveryInfo,
+  removeBeitNahlaDeliveryInfo,
 } from '@/utils/storage';
 import { BASE_URL } from '@/services/api';
 
@@ -279,6 +283,7 @@ const OrderSummary = ({
   vat,
   discount,
   deliveryCharge = 0,
+  serviceCharge = 0,
   city,
   total,
   coupon = '',
@@ -334,6 +339,27 @@ const OrderSummary = ({
             </Text>
           </View>
         )}
+        {/* Beit Nahla / non-Sweets delivery: only when actually charged */}
+        {!city && deliveryCharge > 0 && (
+          <View style={styles.priceRow}>
+            <Text style={[styles.priceLabel, { color: Colors.primary, fontWeight: '700' }]}>
+              Delivery Charge
+            </Text>
+            <Text style={[styles.priceValue, { color: Colors.primary, fontWeight: '700' }]}>
+              + AED{deliveryCharge.toFixed(2)}
+            </Text>
+          </View>
+        )}
+        {serviceCharge > 0 && (
+          <View style={styles.priceRow}>
+            <Text style={[styles.priceLabel, { color: Colors.primary, fontWeight: '700' }]}>
+              Service Charge
+            </Text>
+            <Text style={[styles.priceValue, { color: Colors.primary, fontWeight: '700' }]}>
+              + AED{serviceCharge.toFixed(2)}
+            </Text>
+          </View>
+        )}
         {isCouponApplied && (
           <View style={styles.priceRow}>
             <Text style={[styles.priceLabel, { color: Colors.primaryBlue }]}>Discount (coupon)</Text>
@@ -384,6 +410,7 @@ export default function CartScreen() {
   const [stockLoaded,       setStockLoaded]        = useState(false);
   const [heatingChoices,    setHeatingChoices]     = useState<Record<number, 'yes' | 'no'>>({});
   const [sweetsDeliveryInfo,setSweetsDeliveryInfo] = useState<any>(null);
+  const [beitNahlaDeliveryInfo, setBeitNahlaDeliveryInfo] = useState<any>(null);
   const [confirmedOrder,    setConfirmedOrder]     = useState<any>(null);
   const [retrying,          setRetrying]           = useState(false);
   const [retryError,        setRetryError]         = useState<string | null>(null);
@@ -402,6 +429,7 @@ export default function CartScreen() {
 
   useEffect(() => {
     getSweetsDeliveryInfo().then((info) => { if (info) setSweetsDeliveryInfo(info); });
+    getBeitNahlaDeliveryInfo().then((info) => { if (info) setBeitNahlaDeliveryInfo(info); });
   }, []);
 
   // mapCartToUI — identical to web
@@ -482,6 +510,29 @@ export default function CartScreen() {
         } else {
           cartResponseData = await getGuestCart();
         }
+
+        // Merge Beit Nahla items (vending backend can't store them, so they
+        // live in a dedicated key — identical to web cartSlice.ts). Deduped by
+        // plan_type + id so a guest cart that already holds them isn't doubled.
+        const bnCart = await getBeitNahlaCart();
+        const beitNahlaItems: any[] = Array.isArray(bnCart?.items) ? bnCart.items : [];
+        if (beitNahlaItems.length > 0) {
+          const base = cartResponseData || { items: [], total_price: '0.00' };
+          const seen = new Set(
+            (base.items || []).map(
+              (i: any) => `${i.plan_type || ''}:${i.menu_item?.id || i.id}`,
+            ),
+          );
+          for (const bn of beitNahlaItems) {
+            const k = `${bn.plan_type || 'BEIT_NAHLA'}:${bn.menu_item?.id || bn.id}`;
+            if (!seen.has(k)) {
+              base.items = [...(base.items || []), bn];
+              seen.add(k);
+            }
+          }
+          cartResponseData = base;
+        }
+
         if (cartResponseData) {
           setCartData(cartResponseData);
           mapCartToUI(cartResponseData, newImageMap);
@@ -745,15 +796,52 @@ export default function CartScreen() {
     const subtotal = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
     const vat      = subtotal * 0.05;
     const discount = coupon.toUpperCase() === 'DOSTA25' ? 25.0 : 0;
-    const isSweets = cartData?.plan_type === 'SWEETS';
-    const city     = items.length > 0 ? cartData?.city || sweetsDeliveryInfo?.city : undefined;
-    let effectiveCharge = parseFloat(cartData?.delivery_charge || '0');
-    if (isSweets && city && city !== 'Dubai') effectiveCharge = 40;
-    const activeDeliveryCharge = items.length > 0 ? effectiveCharge : 0;
-    const finalTotal = Math.max(0, subtotal + vat - discount + activeDeliveryCharge);
+    // Treat the cart as Sweets ONLY when actual SWEETS items are present.
+    // Reading cartData.plan_type alone mis-flags a Beit Nahla cart as Sweets
+    // (its payload carries city "Dubai"), which renders the misleading
+    // "Delivery Charge (Dubai) — FREE" line and hides the real Beit Nahla
+    // delivery/service charges. Identical guard to web CartPage.tsx.
+    const hasSweets = items.some((i) => i.planType === 'SWEETS');
+    const isSweets = hasSweets;
+    // city only matters for the Sweets delivery scheme
+    const city = hasSweets ? cartData?.city || sweetsDeliveryInfo?.city : undefined;
+    let effectiveCharge = hasSweets ? parseFloat(cartData?.delivery_charge || '0') : 0;
+    if (hasSweets && city && city !== 'Dubai') effectiveCharge = 40;
+
+    // ── Beit Nahla fees ───────────────────────────────────────────────
+    // The Beit Nahla flow stored its calculated service + delivery charges
+    // under beitNahlaDeliveryInfo. If Beit Nahla items are in the cart, fold
+    // them into the totals (identical to web CartPage.tsx).
+    const hasBeitNahla = items.some((i) => i.planType === 'BEIT_NAHLA');
+    const bnServiceCharge =
+      hasBeitNahla && beitNahlaDeliveryInfo?.service_charge
+        ? Number(beitNahlaDeliveryInfo.service_charge)
+        : 0;
+    const bnDeliveryCharge =
+      hasBeitNahla && beitNahlaDeliveryInfo?.delivery_charge
+        ? Number(beitNahlaDeliveryInfo.delivery_charge)
+        : 0;
+
+    const activeDeliveryCharge = items.length > 0 ? effectiveCharge + bnDeliveryCharge : 0;
+    const activeServiceCharge  = items.length > 0 ? bnServiceCharge : 0;
+    const finalTotal = Math.max(
+      0,
+      subtotal + vat - discount + activeDeliveryCharge + activeServiceCharge,
+    );
     const isMinimumMet = !isSweets || city === 'Dubai' || subtotal >= 100;
-    return { subtotal, vat, discount, deliveryCharge: activeDeliveryCharge, total: finalTotal, isMinimumMet, isSweets, city };
-  }, [items, coupon, cartData, sweetsDeliveryInfo]);
+    return {
+      subtotal,
+      vat,
+      discount,
+      deliveryCharge: activeDeliveryCharge,
+      serviceCharge: activeServiceCharge,
+      total: finalTotal,
+      isMinimumMet,
+      isSweets,
+      hasBeitNahla,
+      city,
+    };
+  }, [items, coupon, cartData, sweetsDeliveryInfo, beitNahlaDeliveryInfo]);
 
   const getMainTitle = () => {
     if (!cartData) return 'Order Now';
@@ -772,6 +860,8 @@ export default function CartScreen() {
     if (orderNowItems.length > 0) groups.push({ title: 'Order Now', items: orderNowItems });
     const sweetsItems = items.filter((i) => i.planType === 'SWEETS');
     if (sweetsItems.length > 0) groups.push({ title: 'Dosta Sweets', items: sweetsItems });
+    const beitNahlaItems = items.filter((i) => i.planType === 'BEIT_NAHLA');
+    if (beitNahlaItems.length > 0) groups.push({ title: 'Beit Nahla', items: beitNahlaItems });
     const weeklyItems = items.filter((i) => i.planType === 'START_PLAN' && i.planSubtype === 'WEEKLY');
     if (weeklyItems.length > 0) groups.push({ title: 'Weekly Plan', items: weeklyItems });
     const monthlyItems = items.filter((i) => i.planType === 'START_PLAN' && i.planSubtype === 'MONTHLY');
@@ -923,6 +1013,36 @@ export default function CartScreen() {
             </View>
           )}
 
+          {/* Beit Nahla delivery info card */}
+          {summary.hasBeitNahla && beitNahlaDeliveryInfo && (
+            <View style={styles.deliveryInfoCard}>
+              <Text style={styles.deliveryInfoTitle}>Beit Nahla Delivery</Text>
+              {!!beitNahlaDeliveryInfo.name && (
+                <View style={styles.deliveryInfoRow}>
+                  <Text style={styles.deliveryInfoLabel}>Name:</Text>
+                  <Text style={styles.deliveryInfoValue}>{beitNahlaDeliveryInfo.name}</Text>
+                </View>
+              )}
+              <View style={styles.deliveryInfoRow}>
+                <Text style={styles.deliveryInfoLabel}>Address:</Text>
+                <Text style={styles.deliveryInfoValue}>{beitNahlaDeliveryInfo.address}</Text>
+              </View>
+              <View style={styles.deliveryInfoRow}>
+                <Text style={styles.deliveryInfoLabel}>Phone:</Text>
+                <Text style={styles.deliveryInfoValue}>{beitNahlaDeliveryInfo.phone}</Text>
+              </View>
+              {beitNahlaDeliveryInfo.distance_km != null && (
+                <View style={styles.deliveryInfoRow}>
+                  <Text style={styles.deliveryInfoLabel}>Distance:</Text>
+                  <Text style={styles.deliveryInfoValue}>
+                    {beitNahlaDeliveryInfo.distance_km} km
+                    {beitNahlaDeliveryInfo.mode === 'WEEKLY' ? '  ·  Weekly' : '  ·  Order Now'}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
           {/* Cart groups */}
           {getGroupedCartItems().map((group, idx) => (
             <OrderList
@@ -955,6 +1075,7 @@ export default function CartScreen() {
               vat={summary.vat}
               discount={summary.discount}
               deliveryCharge={summary.deliveryCharge}
+              serviceCharge={summary.serviceCharge}
               city={summary.city}
               total={summary.total}
               coupon={coupon}
@@ -962,6 +1083,80 @@ export default function CartScreen() {
               onCheckout={async () => {
                 const token = await getAuthToken();
                 if (!token) { setShowAuthModal(true); return; }
+
+                // ── Beit Nahla checkout ──────────────────────────────────
+                // Posts to the catering backend (it doesn't go through the
+                // vending payment gateway — it's not tied to a machine). On
+                // success we clear the Beit Nahla cart and toast. Faithful
+                // port of web pages/CartPage.tsx.
+                if (summary.hasBeitNahla) {
+                  const bnItems = items.filter((i) => i.planType === 'BEIT_NAHLA');
+                  // Pull the original snapshot for selections_summary text
+                  // (mapCartToUI strips the per-box description).
+                  const bnRaw = (await getBeitNahlaCart()) || { items: [] };
+                  const summariesByMenuId: Record<number, string> = {};
+                  (bnRaw.items || []).forEach((raw: any) => {
+                    const k = Number(raw.menu_item?.id ?? raw.id);
+                    summariesByMenuId[k] = raw.menu_item?.description || '';
+                  });
+
+                  const mode =
+                    (beitNahlaDeliveryInfo?.mode as 'ORDER_NOW' | 'WEEKLY') || 'ORDER_NOW';
+
+                  const payload = {
+                    mode,
+                    customer_name:  beitNahlaDeliveryInfo?.name || '',
+                    customer_phone: beitNahlaDeliveryInfo?.phone || sweetsDeliveryInfo?.phone || '',
+                    building:       beitNahlaDeliveryInfo?.building || '',
+                    street:         beitNahlaDeliveryInfo?.street || '',
+                    appt:           beitNahlaDeliveryInfo?.appt || '',
+                    delivery_address: beitNahlaDeliveryInfo?.address || '',
+                    latitude:       beitNahlaDeliveryInfo?.latitude ?? null,
+                    longitude:      beitNahlaDeliveryInfo?.longitude ?? null,
+                    distance_km:    beitNahlaDeliveryInfo?.distance_km ?? null,
+                    tier_label:     beitNahlaDeliveryInfo?.tier_label || '',
+                    subtotal:       summary.subtotal,
+                    vat:            summary.vat,
+                    discount:       summary.discount,
+                    service_charge: summary.serviceCharge,
+                    delivery_charge: summary.deliveryCharge,
+                    total_amount:   summary.total,
+                    items: bnItems.map((it) => ({
+                      meal_box_id:        it.menuItemId,
+                      box_name:           it.name,
+                      unit_price:         it.price,
+                      quantity:           it.quantity,
+                      selections_summary: summariesByMenuId[it.menuItemId] || '',
+                    })),
+                  };
+
+                  try {
+                    setIsCheckingOut(true);
+                    await axios.post(
+                      `${BASE_URL}/api/catering/beit-nahla/orders/create/`,
+                      payload,
+                      { headers: { Authorization: `Token ${token}` } },
+                    );
+                    await removeBeitNahlaCart();
+                    await removeBeitNahlaDeliveryInfo();
+                    Toast.show({
+                      type: 'success',
+                      text1: 'Beit Nahla order placed!',
+                      text2: 'The kitchen will start preparing it shortly.',
+                    });
+                    dispatch(syncLocalCart([]));
+                    setItems((prev) => prev.filter((i) => i.planType !== 'BEIT_NAHLA'));
+                    setBeitNahlaDeliveryInfo(null);
+                  } catch (err: any) {
+                    Toast.show({
+                      type: 'error',
+                      text1: err?.response?.data?.error || 'Failed to place Beit Nahla order. Please try again.',
+                    });
+                  } finally {
+                    setIsCheckingOut(false);
+                  }
+                  return;
+                }
 
                 // ── UAE Order Time Restriction ───────────────────────────
                 // Faithful port of web pages/CartPage.tsx processCheckout.

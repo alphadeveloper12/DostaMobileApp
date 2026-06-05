@@ -111,8 +111,13 @@ const AccountSettings = () => {
         setOriginal(data);
         setNotifications(data.email_notifications || []);
         setOriginalNotifs(data.email_notifications || []);
-      } catch { navigation.replace('SignIn'); }
-      finally { setLoading(false); }
+      } catch (e) {
+        // Web parity (AccountSettings.tsx): only a missing token sends the user
+        // to SignIn. A profile-fetch failure (backend down, network error,
+        // transient 5xx) must NOT log the user out — just log it and keep them
+        // on the screen so they can retry.
+        console.error('Error fetching profile:', e);
+      } finally { setLoading(false); }
     };
     fetch_();
   }, []);

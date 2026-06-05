@@ -1,74 +1,69 @@
 {
-  "expo": {
-    "name": "Dosta",
-    "slug": "dosta-mobile",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "userInterfaceStyle": "light",
-    "icon": "./src/assets/icon.png",
-    "splash": {
-      "image": "./src/assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#054A86"
-    },
-    "scheme": "dosta",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
-    "ios": {
-      "supportsTablet": false,
-      "bundleIdentifier": "com.dosta.app",
-      "buildNumber": "10",
-      "config": {
-        "googleMapsApiKey": "AIzaSyAG4wytnbgV_4fNRpyDIm6xjCf8A-vMfPU"
-      },
-      "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "We use your location to find the nearest vending machine.",
-        "NSLocationAlwaysUsageDescription": "We use your location to find the nearest vending machine.",
-        "CFBundleURLTypes": [
-          {
-            "CFBundleURLSchemes": [
-              "com.googleusercontent.apps.760692328304-ono9clmtpclgluovk69kqmusjjojbu3f"
-            ]
-          },
-          {
-            "CFBundleURLSchemes": [
-              "com.googleusercontent.apps.760692328304-ono9clmtpclgluovk69kqmusjjojbu3f"
-            ]
-          }
-        ],
-        "ITSAppUsesNonExemptEncryption": false
-      }
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./src/assets/icon.png",
-        "backgroundColor": "#054A86"
-      },
-      "package": "com.dosta.app",
-      "versionCode": 10,
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyAG4wytnbgV_4fNRpyDIm6xjCf8A-vMfPU"
-        }
-      },
-      "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+ "expo": {
+  "name": "Dosta",
+  "slug": "dosta-mobile",
+  "version": "1.0.0",
+  "orientation": "portrait",
+  "userInterfaceStyle": "light",
+  "icon": "./src/assets/icon.png",
+  "splash": {
+   "image": "./src/assets/splash.png",
+   "resizeMode": "contain",
+   "backgroundColor": "#054A86"
+  },
+  "scheme": "dosta",
+  "assetBundlePatterns": ["**/*"],
+  "ios": {
+   "supportsTablet": false,
+   "bundleIdentifier": "com.dosta.app",
+   "buildNumber": "10",
+   "config": {
+    "googleMapsApiKey": "AIzaSyAG4wytnbgV_4fNRpyDIm6xjCf8A-vMfPU"
+   },
+   "infoPlist": {
+    "NSLocationWhenInUseUsageDescription": "We use your location to find the nearest vending machine.",
+    "NSLocationAlwaysUsageDescription": "We use your location to find the nearest vending machine.",
+    "CFBundleURLTypes": [
+     {
+      "CFBundleURLSchemes": [
+       "com.googleusercontent.apps.760692328304-ono9clmtpclgluovk69kqmusjjojbu3f"
       ]
-    },
-    "web": {},
-    "plugins": [
-      "expo-secure-store",
-      "@react-native-community/datetimepicker",
-      "expo-font",
-      "expo-web-browser"
+     },
+     {
+      "CFBundleURLSchemes": [
+       "com.googleusercontent.apps.760692328304-ono9clmtpclgluovk69kqmusjjojbu3f"
+      ]
+     }
     ],
-    "extra": {
-      "apiUrl": "https://dosta.cloud",
-      "eas": {
-        "projectId": "72bca3af-2895-46f3-9316-0c4ee93d4071"
-      }
+    "ITSAppUsesNonExemptEncryption": false
+   }
+  },
+  "android": {
+   "adaptiveIcon": {
+    "foregroundImage": "./src/assets/icon.png",
+    "backgroundColor": "#054A86"
+   },
+   "package": "com.dosta.app",
+   "versionCode": 10,
+   "config": {
+    "googleMaps": {
+     "apiKey": "AIzaSyAG4wytnbgV_4fNRpyDIm6xjCf8A-vMfPU"
     }
+   },
+   "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+  },
+  "web": {},
+  "plugins": [
+   "expo-secure-store",
+   "@react-native-community/datetimepicker",
+   "expo-font",
+   "expo-web-browser"
+  ],
+  "extra": {
+   "apiUrl": "https://dosta.cloud",
+   "eas": {
+    "projectId": "72bca3af-2895-46f3-9316-0c4ee93d4071"
+   }
   }
+ }
 }
